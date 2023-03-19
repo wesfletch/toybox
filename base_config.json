@@ -1,0 +1,27 @@
+{
+    "entities": 
+    [
+        {
+            "name": "test",
+            "type": "agent",
+            "plugins": 
+            [
+                {
+                    "plugin_id": "DiffDrive", 
+                    "type": "DiffDrivePlugin",
+
+                    "wheel_radius": 0.05,
+                    "wheel_base": 0.1,
+                    
+                    "min_accel_x": 0.01,
+                    "max_accel_x": 0.1,
+                    "min_accel_theta": 0.01,
+                    "max_accel_theta": 0.1,
+
+                    "vel_target_timeout": 1.0
+                }
+            ]
+        }    
+    ]
+    
+}
