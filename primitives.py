@@ -23,21 +23,22 @@ class Position:
     """
     Position in 2-space.
     """
-    x: float
-    y: float
+    x: float = 0.0
+    y: float = 0.0
 
 # 2D for now
 @dataclass
 class Orientation:
-    """Orientation in 2D space.
     """
-    theta: float # radians
+    Orientation in 2D space.
+    """
+    theta: float = 0.0 # radians
 
 # 2D for now
 @dataclass
 class Pose:
-    position: Position
-    orientation: Orientation
+    position: Position = Position()
+    orientation: Orientation = Orientation()
 
     def update(
         self,
