@@ -10,34 +10,49 @@ from primitives import Polygon, Position, Orientation, Pose
 
 class Entity(ABC):
 
-    @property
     @abstractmethod
-    def id(self) -> str:
-        raise NotImplementedError
+    def __init__(
+        self,
+        id: str = "",
+        shape: Polygon = None,
+        pose: Pose = None,
+        plugins: Dict[str,Plugin] = {}
+    ) -> None:
+        
+        self._id: str = id
+        self._shape: Polygon = shape if (shape) else Polygon()
+        self._pose: Pose = pose if pose is not None else Pose()
+        self._plugins: Dict[str,Plugin] = plugins
 
     @property
-    @abstractmethod
+    def id(self) -> str:
+        return self._id
+
+    @property
     def pose(self) -> Pose:
-        raise NotImplementedError
+        return self._pose
     
     @pose.setter 
     def pose(self, pose: Pose) -> None:
-        raise NotImplementedError
+        self._pose = pose
 
     @property
-    @abstractmethod
     def shape(self) -> Polygon:
-        raise NotImplementedError
+        return self._shape
 
     @property
-    @abstractmethod
     def plugins(self) -> Dict[str, Plugin]:
-        raise NotImplementedError
+        return self._plugins
 
-    @property
-    @abstractmethod
-    def plugin_types(self) -> Dict[PLUGIN_TYPE, str]:
-        raise NotImplementedError
+    # @property
+    # @abstractmethod
+    # def plugin_types(self) -> Dict[PLUGIN_TYPE, str]:
+        
+    #     raise NotImplementedError
+
+    def load_plugins(self, plugins: Dict[str,Plugin]) -> None:
+        for plugin in plugins.keys():
+            self.load_plugin(plugin_id=plugin, plugin=plugins[plugin])
 
     def load_plugin(self, plugin_id: str, plugin: Plugin) -> bool:
 
@@ -59,40 +74,43 @@ class Entity(ABC):
         else:
             return self.plugins[plugin_id]
 
+class Thing(Entity):
+
+    def __init__(
+        self,
+        id: str = "",
+        shape: Polygon = None,
+        pose: Pose = None,
+    ) -> None:
+
+        super().__init__(
+            id=id,
+            shape=shape,
+            pose=pose,
+            plugins=None
+        )
+        print(self._pose)
+
 class Agent(Entity):
 
     def __init__(
         self, 
         id: str = "", 
         shape: Polygon = None,
-        position: Tuple[float, float] = (0.0,0.0),
-        orientation: float = 0.0,
+        pose: Pose = None,
         plugins: Dict[str, Plugin] = {}
     ) -> None:
 
-        self._id: str = id
-        self._shape: Polygon = shape if (shape) else Polygon()
-        self._position: Position = Position(x=position[0], y=position[1])
-        self._orientation: Orientation = Orientation(theta=orientation)
-        self._pose: Pose = Pose(position=self._position, orientation=self._orientation)
-        self._plugins: Dict[str, Plugin] = plugins
+        super().__init__(
+            id=id,
+            shape=shape,
+            pose=pose,
+            plugins=None
+        )
+        
         self._plugin_types: Dict[PLUGIN_TYPE, str] = {}
-
-    # @property
-    # def position(self) -> Position:
-    #     return self._position
-
-    # @position.setter
-    # def position(self, position: Position) -> None:
-    #     self._position = position
-    
-    # @property
-    # def orientation(self) -> Orientation:
-    #     return self._orientation
-
-    # @orientation.setter
-    # def orientation(self, orientation: Orientation) -> None:
-    #     self._orientation = orientation
+        for plugin in self._plugins.values():
+            self._plugin_types[plugin.id] = plugin.plugin_type
 
     @property
     def pose(self) -> Pose:
@@ -120,7 +138,7 @@ class Agent(Entity):
     
 def main() -> None:
 
-    pass
+    thing: Thing = Thing()
 
 if __name__ == '__main__':
     main()
