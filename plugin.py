@@ -41,9 +41,25 @@ class Plugin(ABC):
     @abstractmethod
     def plugin_type(cls) -> PLUGIN_TYPE:
         raise NotImplementedError
+    
+    @property
+    def id(self) -> str:
+        return self._id
 
     @abstractmethod
     def initialize(self, owner: 'Entity') -> None:
+        raise NotImplementedError
+
+    @classmethod
+    @abstractmethod
+    def from_config(
+        cls,
+        json_config: Dict[str,str]
+    ) -> 'Plugin':
+        raise NotImplementedError
+
+    @abstractmethod
+    def parse_config(self, json_dict: Dict[str,str]) -> None:
         raise NotImplementedError
 
     @abstractmethod
@@ -57,36 +73,42 @@ class DiffDrivePlugin(Plugin):
 
     def __init__(
         self,
-        id: str,
-        config_file: str = None
+        id: str = "",
+        json_config: Dict[str,str] = None
     ) -> None:
         
-        self._id: str = id
-
-        if config_file:
-            raise NotImplementedError
-        else:
-            self._wheel_base = 0.1
-            self._wheel_radius = 0.05
-
+        #### default values ####
         self._owner: 'Entity'
+        self._id: str = id
+        # wheel constants
+        self._wheel_base = 0.1
+        self._wheel_radius = 0.05
+        # velocity parameters
         self._vel_target: Tuple[float, float] = (0,0)
         self._vel_target_timeout: float = 1.0
         self._use_target_timeout: bool = True
-
         # timing
         self._time_last_call: float = -1.0
         self._time_last_target: float = -1.0
 
+        # override defaults if config file provided
+        if json_config:
+            self.parse_config(json_config)
+
     @classmethod
-    def create_from_json(
-        cls, 
+    def from_config(
+        cls,
+        json_config: Dict[str,str]
+    ) -> 'Plugin':
+        return cls(id="", json_config=json_config)
+
+    def parse_config(
+        self,
         json_dict: Dict[str,str]
-    ) -> 'DiffDrivePlugin':
+    ) -> None:
 
-        self: DiffDrivePlugin = cls.__new__(cls)
-        # ddp: DiffDrivePlugin = DiffDrivePlugin()
-
+        if "plugin_id" in json_dict:
+            self._id = json_dict["plugin_id"]
         if "wheel_radius" in json_dict:
             wheel_radius: float = float(json_dict["wheel_radius"])
             # needs some asserts, eventually
@@ -111,13 +133,13 @@ class DiffDrivePlugin(Plugin):
         #     max_accel_theta: float = float(json_dict["max_accel_theta"])
         #     # needs some asserts, eventually
         #     self._max_accel_theta = max_accel_theta
+        if "use_vel_target_timeout" in json_dict:
+            self._use_target_timeout: bool = bool(json_dict["use_vel_target_timeout"])
         if "vel_target_timeout" in json_dict:
             vel_target_timeout: float = float(json_dict["vel_target_timeout"])
             # needs some asserts, eventually
             self._vel_target_timeout = vel_target_timeout
-            self._use_target_timeout = True
-        
-        return self
+            # self._use_target_timeout = True
 
     def initialize(
         self,
@@ -147,7 +169,7 @@ class DiffDrivePlugin(Plugin):
         if self._time_last_call < 0:
             self._time_last_call = call_time
 
-        if self._use_target_timeout:
+        if self._use_target_timeout and self._time_last_target > -1:
             if (call_time - self._time_last_target) >= self._vel_target_timeout:
                 print(f'Time since last velocity target update exceeds limit. Setting velocity to (0.0,0.0)')
                 self.set_velocity_target(0.0, 0.0)
@@ -171,7 +193,8 @@ class DiffDrivePlugin(Plugin):
         theta_vel: float,
         timeout: bool = True
     ) -> None:
-        """_summary_
+        """
+        _summary_
 
         Args:
             x_vel (float): _description_
@@ -186,7 +209,8 @@ class DiffDrivePlugin(Plugin):
         x_vel: float,
         theta_vel: float
     ) -> Tuple[float, float]:
-        """Decomposes a desired target velocity [x, theta] into L- and R-wheel velocities
+        """
+        Decomposes a desired target velocity [x, theta] into L- and R-wheel velocities
         """
 
         R: float = self._wheel_radius
@@ -228,11 +252,6 @@ class DiffDrivePlugin(Plugin):
 
         return (delta_x, delta_y, delta_theta)
 
-
-    def load_base_config(self) -> None:
-        pass
-
-
 def main():
 
     json_file = open("base_config.json", "r")
@@ -243,7 +262,7 @@ def main():
     diff_drive_json = json_file['entities'][0]['plugins'][0]
     print(diff_drive_json)
 
-    diffy: DiffDrivePlugin = DiffDrivePlugin.create_from_json(json_dict=diff_drive_json)
+    diffy: DiffDrivePlugin = DiffDrivePlugin(json_config=diff_drive_json)
     print(diffy)
 
 if __name__ == "__main__":
