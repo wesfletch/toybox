@@ -95,6 +95,10 @@ def parse_entity(
         plugins: Dict[str,Plugin] = parse_plugins(entity_config["plugins"])
         entity.load_plugins(plugins)
 
+    # optional argument
+    if "sprite" in entity_config:
+        entity.sprite = entity_config["sprite"]
+
     return entity
 
 def parse_plugins(

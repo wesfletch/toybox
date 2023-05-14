@@ -3,7 +3,7 @@
 import math
 
 from abc import ABC, abstractmethod
-from typing import Tuple, List, Dict
+from typing import Tuple, List, Dict, Union
 
 from plugin import Plugin, PluginNotFoundException, DiffDrivePlugin, PLUGIN_TYPE
 from primitives import Polygon, Position, Orientation, Pose
@@ -16,13 +16,15 @@ class Entity(ABC):
         id: str = "",
         shape: Polygon = None,
         pose: Pose = None,
-        plugins: Dict[str,Plugin] = {}
+        plugins: Dict[str,Plugin] = {},
+        sprite: str = None
     ) -> None:
         
         self._id: str = id
         self._shape: Polygon = shape if (shape) else Polygon()
-        self._pose: Pose = pose if pose is not None else Pose()
+        self._pose: Pose = pose if (pose is not None) else Pose()
         self._plugins: Dict[str,Plugin] = plugins
+        self._sprite: str = sprite
 
     @property
     def id(self) -> str:
@@ -43,12 +45,14 @@ class Entity(ABC):
     @property
     def plugins(self) -> Dict[str, Plugin]:
         return self._plugins
-
-    # @property
-    # @abstractmethod
-    # def plugin_types(self) -> Dict[PLUGIN_TYPE, str]:
-        
-    #     raise NotImplementedError
+    
+    @property
+    def sprite(self) -> str:
+        return self._sprite
+    
+    @sprite.setter
+    def sprite(self, new_sprite: str) -> None:
+        self._sprite = new_sprite
 
     def load_plugins(self, plugins: Dict[str,Plugin]) -> None:
         for plugin in plugins.keys():
@@ -69,6 +73,9 @@ class Entity(ABC):
 
     def get_plugin(self, plugin_id: str) -> Plugin:
         
+        if self.plugins is None:
+            raise PluginNotFoundException(plugin_id=plugin_id, object_id=self.id)
+
         if plugin_id not in self.plugins.keys():
             raise PluginNotFoundException(plugin_id=plugin_id, object_id=self.id)
         else:
@@ -98,19 +105,23 @@ class Agent(Entity):
         id: str = "", 
         shape: Polygon = None,
         pose: Pose = None,
-        plugins: Dict[str, Plugin] = {}
+        plugins: Dict[str, Plugin] = {},
+        sprite: str = None
     ) -> None:
 
         super().__init__(
             id=id,
             shape=shape,
             pose=pose,
-            plugins=None
+            plugins=plugins,
+            sprite=sprite,
         )
         
         self._plugin_types: Dict[PLUGIN_TYPE, str] = {}
-        for plugin in self._plugins.values():
-            self._plugin_types[plugin.id] = plugin.plugin_type
+
+        if self._plugins:
+            for plugin in self._plugins.values():
+                self._plugin_types[plugin.id] = plugin.plugin_type
 
     @property
     def pose(self) -> Pose:

@@ -22,7 +22,8 @@
                     "use_vel_target_timeout": false,
                     "vel_target_timeout": 1.0
                 }
-            ]
+            ],
+            "sprite": "star.png"
         }    
     ]
 }
