@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+# Automatically generate the protobuf messages defined
+#   in the subdirectories of toybox_msgs
+
+SCRIPT="$(realpath "$0")"
+BASEDIR="$(dirname "${SCRIPT}")"
+echo "${BASEDIR}"
+for directory in */; do
+
+    IN_DIR="${BASEDIR}/${directory}/proto"
+    OUT_DIR="${BASEDIR}/${directory}/${directory}"
+
+    [[ "${directory}" == "build" ]] && continue
+    [[ ! -d "${IN_DIR}" ]] && continue
+
+    if [[ ! -d "${OUT_DIR}" ]]; then
+        mkdir -p "${OUT_DIR}"
+    fi
+    
+    cp initpy.txt "${OUT_DIR}/__init__.py"
+
+    echo "Building messages in ${IN_DIR}"
+    protoc -I="${IN_DIR}" \
+        --python_out="${OUT_DIR}" \
+        ${IN_DIR}/*.proto
+
+done

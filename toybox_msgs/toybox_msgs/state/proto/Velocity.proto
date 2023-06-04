@@ -1,0 +1,9 @@
+syntax = "proto2";
+
+package state_msgs;
+
+message Velocity {
+    optional float x = 1 [default = 0.0];
+    optional float y = 2 [default = 0.0];
+    optional float z = 3 [default = 0.0];
+}
