@@ -1,0 +1,13 @@
+[project]
+name = "toybox_sim"
+version = "0.0.1"
+authors = [
+    { name="Wes Fletcher", email="please@donot.com" },
+]
+description = "Simple (toy) robotics simulation"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = []
+
+[project-urls]
+"Homepage" = "https://github.com/wesfletch/toybox"

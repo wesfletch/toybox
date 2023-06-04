@@ -1,0 +1,6 @@
+## opengl-related requirements
+pyglet
+moderngl
+
+# ipc
+protobuf
