@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+
+from dataclasses import dataclass, field
+from abc import ABC, abstractmethod
+import os
+import socket
+
+from typing import Dict, List, Tuple, Union, Callable
+
+
+from toybox_core.src import topic
+
+
+class ToyboxServer():
+
+    def __init__(self):
+
+        self._topics: List[Topic] = []
+
+    def register_client(self):
+        """
+        """
+        raise NotImplementedError
+    
+    def register_client_signal(self):
+        """
+        outputs
+        """
+        raise NotImplementedError
+    
+    def register_client_slot(self):
+        """
+        inputs
+        """
+        raise NotImplementedError
+
+    def loop(self):
+        """
+        """
+        raise NotImplementedError

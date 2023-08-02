@@ -1,8 +1,12 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "toybox_msgs"
 version = "0.0.1"
 authors = [
-    { name="Wes Fletcher", email="please@donot.com" },
+    {name="Wes Fletcher", email="please@donot.com"},
 ]
 description = "Simple (toy) robotics stack messages"
 readme = "README.md"
@@ -13,4 +17,7 @@ classifiers = []
 "Homepage" = "https://github.com/wesfletch/toybox"
 
 [tools.setuptools]
-packages=["toybox_msgs","toybox_msgs.primitive_msgs","toybox_msgs.state_msgs","toybox_msgs.test_messages"]
+packages=["toybox_msgs",
+          "toybox_msgs.primitive",
+          "toybox_msgs.state",
+          "toybox_msgs.core"]
