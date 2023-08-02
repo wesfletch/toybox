@@ -4,3 +4,6 @@ moderngl
 
 # ipc
 protobuf
+grpcio # gRPC
+grpcio-tools
+# pyzmq # ZeroMQ

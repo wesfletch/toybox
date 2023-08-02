@@ -1,0 +1,21 @@
+syntax = "proto2";
+
+package core;
+
+service Topic {
+
+    rpc AdvertiseTopic(TopicDefinition) returns (Confirmation) {}
+    rpc SubscribeTopic(TopicDefinition) returns (Confirmation) {}
+
+}
+
+message TopicDefinition {
+    required string uuid = 1;
+    required string topic_name = 2;
+    required string message_type = 3;
+}
+
+message Confirmation {
+    required int32 return_code = 1;
+    required TopicDefinition topic = 2;
+}
