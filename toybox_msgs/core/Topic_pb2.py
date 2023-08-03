@@ -13,7 +13,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0bTopic.proto\x12\x04\x63ore\"I\n\x0fTopicDefinition\x12\x0c\n\x04uuid\x18\x01 \x02(\t\x12\x12\n\ntopic_name\x18\x02 \x02(\t\x12\x14\n\x0cmessage_type\x18\x03 \x02(\t\"I\n\x0c\x43onfirmation\x12\x13\n\x0breturn_code\x18\x01 \x02(\x05\x12$\n\x05topic\x18\x02 \x02(\x0b\x32\x15.core.TopicDefinition2\x85\x01\n\x05Topic\x12=\n\x0e\x41\x64vertiseTopic\x12\x15.core.TopicDefinition\x1a\x12.core.Confirmation\"\x00\x12=\n\x0eSubscribeTopic\x12\x15.core.TopicDefinition\x1a\x12.core.Confirmation\"\x00')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0bTopic.proto\x12\x04\x63ore\"I\n\x0fTopicDefinition\x12\x0c\n\x04uuid\x18\x01 \x02(\t\x12\x12\n\ntopic_name\x18\x02 \x02(\t\x12\x14\n\x0cmessage_type\x18\x03 \x02(\t\"Y\n\x0c\x43onfirmation\x12\x13\n\x0breturn_code\x18\x01 \x02(\x05\x12$\n\x05topic\x18\x02 \x02(\x0b\x32\x15.core.TopicDefinition\x12\x0e\n\x06status\x18\x03 \x01(\t2\x85\x01\n\x05Topic\x12=\n\x0e\x41\x64vertiseTopic\x12\x15.core.TopicDefinition\x1a\x12.core.Confirmation\"\x00\x12=\n\x0eSubscribeTopic\x12\x15.core.TopicDefinition\x1a\x12.core.Confirmation\"\x00')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -24,7 +24,7 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _globals['_TOPICDEFINITION']._serialized_start=21
   _globals['_TOPICDEFINITION']._serialized_end=94
   _globals['_CONFIRMATION']._serialized_start=96
-  _globals['_CONFIRMATION']._serialized_end=169
-  _globals['_TOPIC']._serialized_start=172
-  _globals['_TOPIC']._serialized_end=305
+  _globals['_CONFIRMATION']._serialized_end=185
+  _globals['_TOPIC']._serialized_start=188
+  _globals['_TOPIC']._serialized_end=321
 # @@protoc_insertion_point(module_scope)

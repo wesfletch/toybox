@@ -18,4 +18,5 @@ message TopicDefinition {
 message Confirmation {
     required int32 return_code = 1;
     required TopicDefinition topic = 2;
+    optional string status = 3;
 }

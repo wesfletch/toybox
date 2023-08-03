@@ -1,0 +1,22 @@
+syntax = "proto2";
+
+package core;
+
+service Register {
+    rpc RegisterClient(RegisterRequest) returns (RegisterResponse) {}
+}
+
+message ClientMetadata {
+    required string addr = 1;
+    required string port = 2;
+}
+
+message RegisterRequest {
+    required string client_id = 1;
+    required ClientMetadata meta = 2;
+}
+
+message RegisterResponse {
+    required int32 return_code = 1;
+    optional string status = 2;
+}

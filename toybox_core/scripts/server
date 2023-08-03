@@ -1,40 +1,64 @@
 #!/usr/bin/env python3
 
-from dataclasses import dataclass, field
-from abc import ABC, abstractmethod
 import os
-import socket
-
+import sys
 from typing import Dict, List, Tuple, Union, Callable
 
+import grpc
+import concurrent.futures as futures
 
-from toybox_core.src import topic
+# stupid hack because pip is the worst
+sys.path.append('/home/dev/toybox')
 
+from toybox_core.src.TopicServer import (
+    Topic,
+    TopicServicer
+)
+from toybox_core.src.RegisterServer import (
+    Client,
+    RegisterServicer
+)
+
+from toybox_msgs.core.Register_pb2_grpc import (
+    add_RegisterServicer_to_server
+)
+from toybox_msgs.core.Topic_pb2_grpc import (
+    add_TopicServicer_to_server
+)
 
 class ToyboxServer():
 
     def __init__(self):
+        
+        self._topics: Dict[str, Topic] = {}
+        self._clients: Dict[str,Client] = {}
 
-        self._topics: List[Topic] = []
+        self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+        self._topic_servicer: TopicServicer = TopicServicer(topics=self._topics)
+        self._register_servicer: RegisterServicer = RegisterServicer(clients=self._clients)
 
-    def register_client(self):
-        """
-        """
-        raise NotImplementedError
-    
-    def register_client_signal(self):
-        """
-        outputs
-        """
-        raise NotImplementedError
-    
-    def register_client_slot(self):
-        """
-        inputs
-        """
-        raise NotImplementedError
+        self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+        add_TopicServicer_to_server(
+            self._topic_servicer,
+            self._server
+        )
+        add_RegisterServicer_to_server(
+            self._register_servicer,
+            self._server
+        )
 
-    def loop(self):
-        """
-        """
-        raise NotImplementedError
+        self._server.add_insecure_port('[::]:50051')
+
+    def serve(self):
+        self._server.start()
+        self._server.wait_for_termination()
+
+
+def main():
+
+    tbx = ToyboxServer()
+    tbx.serve()
+
+
+if __name__ == "__main__":
+    main()
