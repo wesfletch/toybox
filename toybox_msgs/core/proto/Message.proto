@@ -1,0 +1,16 @@
+syntax = "proto2";
+
+package core;
+
+service Publish {
+    rpc PublishMessage(Message) returns (MessageConf) {}
+}
+
+import "google/protobuf/any.proto";
+message Message {
+    required string message_type = 1;
+    required google.protobuf.Any message = 2;
+}
+
+// intentionally left empty, may be used later
+message MessageConf {}
