@@ -3,12 +3,10 @@
 from abc import ABC
 from dataclasses import dataclass, field
 import sys
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import grpc
-from google.protobuf.json_format import MessageToDict
 import concurrent.futures as futures
-
 
 # stupid hack because pip is the worst
 sys.path.append('/home/dev/toybox')
@@ -24,13 +22,11 @@ class Message():
     """
     pass
 
-
 @dataclass
 class Client():
-    uuid: str
+    client_id: str
     addr: str
-    port: str
-
+    port: int
 
 class RegisterServicer(Register_pb2_grpc.RegisterServicer):
 
@@ -50,15 +46,34 @@ class RegisterServicer(Register_pb2_grpc.RegisterServicer):
         if self._clients.get(client_id) is not None:
             return Register_pb2.RegisterResponse(
                 return_code=1,
-                status=f"Client with ID {client_id} already registered.")
+                status=f"Client with ID <{client_id}> already registered.")
 
         self._clients[client_id] = Client(
-            uuid=client_id, 
+            client_id=client_id, 
             addr=meta.addr,
             port=meta.port
         )
-        return Register_pb2.ClientResponse(return_code=0)
+        print(self._clients)
+        return Register_pb2.RegisterResponse(return_code=0)
 
+    def DeRegisterClient(
+        self, 
+        request: Register_pb2.DeRegisterRequest, 
+        context
+    ) -> Register_pb2.RegisterResponse:
+
+        client_id: str = request.client_id
+
+        if self._clients.get(client_id) is None:
+            return Register_pb2.RegisterResponse(
+                return_code=1,
+                status=f'No client with ID <{client_id}> registered.'
+            )
+        
+        del self._clients[client_id]
+        print(self._clients)
+        
+        return Register_pb2.RegisterResponse(return_code=0)
 
 class RegisterServer():
     
@@ -77,6 +92,38 @@ class RegisterServer():
         self._server.add_insecure_port('[::]:50051')
         
         self._server.start()
+
+channel: grpc.insecure_channel = grpc.insecure_channel('localhost:50051')
+register_stub: Register_pb2_grpc.RegisterStub = Register_pb2_grpc.RegisterStub(channel=channel)
+
+def register_client_rpc(
+    name: str, 
+    addr: Tuple[str, int]
+) -> bool:
+    
+    host: str
+    port: int
+    host, port = addr
+
+    # build our request
+    client_req: Register_pb2.RegisterRequest = Register_pb2.RegisterRequest(
+        client_id=name,
+        meta=Register_pb2.ClientMetadata(addr=host, port=port)
+    )
+    result: Register_pb2.RegisterResponse = register_stub.RegisterClient(request=client_req)
+    print(result)
+    return (result.return_code == 0)
+
+def deregister_client_rpc(
+    name: str,
+) -> bool:
+    
+    req: Register_pb2.DeRegisterRequest = Register_pb2.DeRegisterRequest(
+        client_id=name
+    )
+    result: Register_pb2.RegisterResponse = register_stub.DeRegisterClient(request=req)
+    print(result)
+    return (result.return_code == 0)
 
 def main():
 

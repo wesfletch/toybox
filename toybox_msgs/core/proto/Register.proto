@@ -4,11 +4,12 @@ package core;
 
 service Register {
     rpc RegisterClient(RegisterRequest) returns (RegisterResponse) {}
+    rpc DeRegisterClient(DeRegisterRequest) returns (RegisterResponse) {}
 }
 
 message ClientMetadata {
     required string addr = 1;
-    required string port = 2;
+    required int32 port = 2;
 }
 
 message RegisterRequest {
@@ -19,4 +20,8 @@ message RegisterRequest {
 message RegisterResponse {
     required int32 return_code = 1;
     optional string status = 2;
+}
+
+message DeRegisterRequest {
+    required string client_id = 1;
 }

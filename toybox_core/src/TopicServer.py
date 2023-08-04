@@ -13,6 +13,7 @@ sys.path.append('/home/dev/toybox')
 
 from toybox_msgs.core.Topic_pb2 import (
     TopicDefinition,
+    AdvertiseConfirmation,
     Confirmation
 )
 from toybox_msgs.core.Topic_pb2_grpc import (
@@ -36,7 +37,7 @@ class TopicServicer(TopicServicer):
     def __init__(self, topics: Dict[str, Topic]):
         self._topics = topics
 
-    def AdvertiseTopic(self, request: TopicDefinition, context) -> Confirmation:
+    def AdvertiseTopic(self, request: TopicDefinition, context) -> AdvertiseConfirmation:
         """
         IN: TopicDefiniton
         OUT: Confirmation
@@ -46,24 +47,41 @@ class TopicServicer(TopicServicer):
         topic_name: str = request.topic_name
         message_type: str = request.message_type
 
+        conf: AdvertiseConfirmation = AdvertiseConfirmation()
+        conf.return_code = 0
+        conf.topic.CopyFrom(request)
+        conf.status: str = ""
+
         # check if this topic already exists
         if self._topics.get(topic_name) is not None:
-            return Confirmation(return_code=1,
-                                topic=request,
-                                status="Topic already advertised.")
+            # for now, don't allow more than one publisher on a given topic
+            if len(self._topics.get(topic_name).publishers) > 0:
+                conf.return_code = 1
+                conf.status = "Topic already advertised."
+                return AdvertiseConfirmation(return_code=1,
+                                    topic=request,
+                                    status="Topic already advertised.")
+            # if we have preemptive subscribers, we need to inform the publisher
+            elif self._topics.get(topic_name).subscribers is not None:
+                conf.subscriber_list.extend(self._topics.get(topic_name).subscribers)
+        else:   
+            self._topics[topic_name] = Topic(name=topic_name,
+                                            message_type=message_type,
+                                            publishers=[uuid])
+            conf.status = f"Topic <{topic_name}> advertised successfully."
         
-        self._topics[topic_name] = Topic(name=topic_name,
-                                         message_type=message_type,
-                                         publishers=[uuid])
+        return conf
     
-        return Confirmation(return_code=0, 
-                            topic=request)
-
-    def SubscribeTopic(self, request: TopicDefinition, context):
+    def SubscribeTopic(self, request: TopicDefinition, context) -> Confirmation:
         
         uuid: str = request.uuid
         topic_name: str = request.topic_name
         message_type: str = request.message_type
+
+        # build our confirmation
+        conf: Confirmation = Confirmation()
+        conf.topic.CopyFrom(request)
+        conf.return_code: int = 0
 
         if self._topics.get(topic_name) is None:
             self._topics[topic_name] = Topic(name=topic_name,
@@ -72,7 +90,7 @@ class TopicServicer(TopicServicer):
         else:
             self._topics[topic_name].subscribers.append(uuid)
 
-        return
+        return conf
 
 
 class TopicServer():
@@ -106,15 +124,23 @@ def main():
         topic_name="butts",
         message_type="butts"
     )
-    conf: Confirmation = stub.AdvertiseTopic(request=advertise_req)
+    conf: AdvertiseConfirmation = stub.AdvertiseTopic(request=advertise_req)
     print(conf)
+
+    subscribe_req: TopicDefinition = TopicDefinition(
+        uuid="test_sub",
+        topic_name="butter",
+        message_type="butts",
+    )
+    sub_conf: Confirmation = stub.SubscribeTopic(request=subscribe_req)
+    print(sub_conf)
 
     advertise_req= TopicDefinition(
         uuid="1",
         topic_name="butter",
-        message_type="butter"
+        message_type="butter",
     )
-    conf: Confirmation = stub.AdvertiseTopic(request=advertise_req)
+    conf: AdvertiseConfirmation = stub.AdvertiseTopic(request=advertise_req)
     print(conf)
 
 if __name__ == "__main__":

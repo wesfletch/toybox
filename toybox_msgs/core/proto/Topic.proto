@@ -4,7 +4,7 @@ package core;
 
 service Topic {
 
-    rpc AdvertiseTopic(TopicDefinition) returns (Confirmation) {}
+    rpc AdvertiseTopic(TopicDefinition) returns (AdvertiseConfirmation) {}
     rpc SubscribeTopic(TopicDefinition) returns (Confirmation) {}
 
 }
@@ -15,8 +15,20 @@ message TopicDefinition {
     required string message_type = 3;
 }
 
+message SubscriberList {
+    repeated string subscriber_id = 1;
+}
+
+message AdvertiseConfirmation {
+    required int32 return_code = 1;
+    required TopicDefinition topic = 2;
+    optional string status = 3;
+    repeated string subscriber_list = 4;
+}
+
 message Confirmation {
     required int32 return_code = 1;
     required TopicDefinition topic = 2;
     optional string status = 3;
 }
+
