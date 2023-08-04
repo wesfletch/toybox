@@ -13,7 +13,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0bTopic.proto\x12\x04\x63ore\"I\n\x0fTopicDefinition\x12\x0c\n\x04uuid\x18\x01 \x02(\t\x12\x12\n\ntopic_name\x18\x02 \x02(\t\x12\x14\n\x0cmessage_type\x18\x03 \x02(\t\"Y\n\x0c\x43onfirmation\x12\x13\n\x0breturn_code\x18\x01 \x02(\x05\x12$\n\x05topic\x18\x02 \x02(\x0b\x32\x15.core.TopicDefinition\x12\x0e\n\x06status\x18\x03 \x01(\t2\x85\x01\n\x05Topic\x12=\n\x0e\x41\x64vertiseTopic\x12\x15.core.TopicDefinition\x1a\x12.core.Confirmation\"\x00\x12=\n\x0eSubscribeTopic\x12\x15.core.TopicDefinition\x1a\x12.core.Confirmation\"\x00')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0bTopic.proto\x12\x04\x63ore\"I\n\x0fTopicDefinition\x12\x0c\n\x04uuid\x18\x01 \x02(\t\x12\x12\n\ntopic_name\x18\x02 \x02(\t\x12\x14\n\x0cmessage_type\x18\x03 \x02(\t\"\'\n\x0eSubscriberList\x12\x15\n\rsubscriber_id\x18\x01 \x03(\t\"{\n\x15\x41\x64vertiseConfirmation\x12\x13\n\x0breturn_code\x18\x01 \x02(\x05\x12$\n\x05topic\x18\x02 \x02(\x0b\x32\x15.core.TopicDefinition\x12\x0e\n\x06status\x18\x03 \x01(\t\x12\x17\n\x0fsubscriber_list\x18\x04 \x03(\t\"Y\n\x0c\x43onfirmation\x12\x13\n\x0breturn_code\x18\x01 \x02(\x05\x12$\n\x05topic\x18\x02 \x02(\x0b\x32\x15.core.TopicDefinition\x12\x0e\n\x06status\x18\x03 \x01(\t2\x8e\x01\n\x05Topic\x12\x46\n\x0e\x41\x64vertiseTopic\x12\x15.core.TopicDefinition\x1a\x1b.core.AdvertiseConfirmation\"\x00\x12=\n\x0eSubscribeTopic\x12\x15.core.TopicDefinition\x1a\x12.core.Confirmation\"\x00')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -23,8 +23,12 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   DESCRIPTOR._options = None
   _globals['_TOPICDEFINITION']._serialized_start=21
   _globals['_TOPICDEFINITION']._serialized_end=94
-  _globals['_CONFIRMATION']._serialized_start=96
-  _globals['_CONFIRMATION']._serialized_end=185
-  _globals['_TOPIC']._serialized_start=188
-  _globals['_TOPIC']._serialized_end=321
+  _globals['_SUBSCRIBERLIST']._serialized_start=96
+  _globals['_SUBSCRIBERLIST']._serialized_end=135
+  _globals['_ADVERTISECONFIRMATION']._serialized_start=137
+  _globals['_ADVERTISECONFIRMATION']._serialized_end=260
+  _globals['_CONFIRMATION']._serialized_start=262
+  _globals['_CONFIRMATION']._serialized_end=351
+  _globals['_TOPIC']._serialized_start=354
+  _globals['_TOPIC']._serialized_end=496
 # @@protoc_insertion_point(module_scope)

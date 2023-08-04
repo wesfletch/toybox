@@ -9,3 +9,6 @@ grpcio-tools
 
 # general
 futures
+
+# static type checking
+types-protobuf
