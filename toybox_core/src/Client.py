@@ -2,7 +2,6 @@
 
 from abc import ABC
 import atexit
-from dataclasses import dataclass, field
 import errno
 from queue import Queue, Empty
 import socket
@@ -11,17 +10,74 @@ import threading
 from typing import Dict, List, Union, Tuple
 
 import grpc
+import concurrent.futures as futures
 
 # stupid hack because pip is the worst
 sys.path.append('/home/dev/toybox')
 
 from toybox_core.src.RegisterServer import (
     register_client_rpc,
-    deregister_client_rpc
+    deregister_client_rpc,
+    get_client_info_rpc,
+)
+from toybox_core.src.TopicServer import (
+    advertise_topic_rpc,
+    subscribe_topic_rpc,
+    Topic,
 )
 
+import toybox_msgs.core.Client_pb2 as Client_pb2
+from toybox_msgs.core.Client_pb2_grpc import (
+    ClientServicer,
+    add_ClientServicer_to_server,
+)
+from toybox_msgs.core.Topic_pb2 import (
+    TopicDefinition,
+)
 
-class MessageServer():
+class ClientRPCServicer(ClientServicer):
+
+    def __init__(
+        self, 
+        subscriptions: Dict[str, Topic],
+        others: List[str],
+    ) -> None:
+        
+        self._subscriptions = subscriptions
+        self._others = others
+
+    def InformOfPublisher(
+        self, 
+        request: TopicDefinition, 
+        context
+    ) -> Client_pb2.InformConfirmation:
+        
+        publisher_uuid: str = request.uuid
+        topic: str = request.topic_name
+        message_type: str = request.message_type
+
+        subscription = self._subscriptions.get(topic, None)
+
+        # first, make sure we actually care about this message
+        if subscription is None:
+            return Client_pb2.InformConfirmation(
+                return_code=1,
+                status="I don't think I asked for this."
+            )
+        # and message type is correct
+        if subscription.message_type != message_type:
+            return Client_pb2.InformConfirmation(
+                return_code=1,
+                status=f"Unexpected message type {message_type}, expected {subscription.message_type}"
+            )
+
+        subscription.publishers.append(publisher_uuid)
+        return Client_pb2.InformConfirmation(
+            return_code=0,
+        )
+
+
+class Node():
 
     def __init__(
         self,
@@ -32,15 +88,38 @@ class MessageServer():
 
         self._host: str = host
         self._port: int = port
-
         self._socket: Union[socket.socket,None] = sock
+
+        self._executor: futures.ThreadPoolExecutor = futures.ThreadPoolExecutor(
+            max_workers=10
+        )
 
         self._inbound: Dict[socket.socket, Queue[str]] = {}
         self._outbound: Dict[socket.socket, Queue[str]] = {}
 
+        self._subscriptions: Dict[str, Topic] = {}
+        self._others: List[str] = []
+
         # listen for incoming connections in separate thread
         self.listen_thread: threading.Thread = threading.Thread(target=self.listen)
         self.listen_thread.start()
+
+    def configure_rpc_servicer(self) -> None:
+
+        self._server = grpc.server(
+            thread_pool=self._executor,
+        )
+        add_ClientServicer_to_server(
+            servicer=ClientRPCServicer(
+                subscriptions=self._subscriptions, 
+                others=self._others),
+            server=self._server,
+        )
+
+        self._server.add_insecure_port(f'[::]:{self._port}')
+
+        # non-blocking
+        self._server.start()
 
     def listen(self) -> None:
 
@@ -58,7 +137,6 @@ class MessageServer():
                 pass
 
     def handshake(self) -> None:
-
         pass
 
     def spin(
@@ -79,10 +157,7 @@ class MessageHandshake():
 
     def next(self, input: str) -> None:
         
-        if 
-
-
-
+        pass
 
 def port_in_use(port: int, host: str = 'localhost') -> bool:
 
@@ -98,7 +173,9 @@ def port_in_use(port: int, host: str = 'localhost') -> bool:
     sock.close()
     return False
 
-def get_available_port(host: str = "localhost") -> int:
+def get_available_port(
+    host: str = "localhost"
+) -> int:
 
     port: int = 50505
     while port_in_use(port=port, host=host):
@@ -118,7 +195,7 @@ def init_node(
     name: str,
     address: Union[Tuple[str,int], None] = None,
     # standalone: bool = False,
-) -> MessageServer:
+) -> Node:
     
     atexit.register(deinit_node, name)
 
@@ -142,25 +219,61 @@ def init_node(
     if not register_client_rpc(name=name, addr=address):
         print("we fucked up, I guess")
 
-    msg_server: MessageServer = MessageServer(host=host,
-                                              port=port,
-                                              sock=sock)
+    node: Node = Node(host=host,
+                      port=port,
+                      sock=sock)
     
-    return msg_server
+    return node
 
-def advertise_topic() -> None:
+def advertise_topic(
+    client_name: str,
+    topic_name: str,
+    message_type: str,
+) -> bool:
 
+    return advertise_topic_rpc(
+        client_name=client_name,
+        topic_name=topic_name,
+        message_type=message_type,
+    )
 
+def subscribe_topic(
+    client_name: str,
+    topic_name: str,
+    message_type: str,
+) -> bool:
 
-
-class ClientServicer():
-    pass
-
+    publishers: List[str] = subscribe_topic_rpc(
+        client_name=client_name,
+        topic_name=topic_name,
+        message_type=message_type,
+    )
+    
+    for publisher in publishers:
+        pass
 
 def main():
-    # msg_server: MessageServer = MessageServer()
 
-    init_node(name="quetzal")
+    node = init_node(name="quetzal")
+
+    # result = advertise_topic(
+    #     client_name="quetzal",
+    #     topic_name="fucker",
+    #     message_type="also_fucker"
+    # )
+    # print(result)
+    
+    # result = subscribe_topic(
+    #     client_name="quetzal",
+    #     topic_name="buttest",
+    #     message_type="butter"
+    # )
+    # print(result)
+
+    # get_client_info_rpc(client_name="quetzal")
+
+    # while True:
+    #     pass
 
 if __name__ == "__main__":
     main()

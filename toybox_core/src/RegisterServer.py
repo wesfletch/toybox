@@ -74,6 +74,38 @@ class RegisterServicer(Register_pb2_grpc.RegisterServicer):
         print(self._clients)
         
         return Register_pb2.RegisterResponse(return_code=0)
+    
+    def GetClientInfo(
+        self, 
+        request: Register_pb2.Client_ID, 
+        context
+    ) -> Register_pb2.ClientResponse:
+
+        client_id: str = request.client_id
+
+        response: Register_pb2.ClientResponse = Register_pb2.ClientResponse()
+
+        client: Client = self._clients.get(client_id, None)
+        if client is None:
+            response.return_code = 1
+            response.status = f"No client found for client_id <{client_id}>"
+            return response
+        
+        # build the response
+        response_client = Register_pb2.Client()
+        response_meta = Register_pb2.ClientMetadata()
+        
+        response_client.client_id = client.client_id
+        response_meta.addr = client.addr
+        response_meta.port = client.port
+
+        response_client.meta.CopyFrom(response_meta)
+        response.client.CopyFrom(response_client)
+
+        response.return_code = 0
+
+        return response
+
 
 class RegisterServer():
     
@@ -125,18 +157,36 @@ def deregister_client_rpc(
     print(result)
     return (result.return_code == 0)
 
+def get_client_info_rpc(
+    client_name: str,
+) -> Register_pb2.ClientInfo:
+    
+    client_req: Register_pb2.Client_ID = Register_pb2.Client_ID(
+        client_id=client_name
+    )
+    result: Register_pb2.ClientResponse = register_stub.GetClientInfo(request=client_req)
+    print(result)
+
+    # return result
+
+
 def main():
 
-    pass
     # channel: grpc.insecure_channel = grpc.insecure_channel('localhost:50051')
     # stub: Client_pb2_grpc.ClientStub = Client_pb2_grpc.ClientStub(channel=channel)
 
-    # client_req: Client_pb2.ClientRequest = Client_pb2.ClientRequest(
-    #     client_id="butts",
-    #     meta=Client_pb2.ClientMetadata(addr="butter", port="buttest")
-    # )
-    # conf: Client_pb2.ClientResponse = stub.RegisterClient(request=client_req)
-    # print(conf)
+    client_req: Register_pb2.RegisterRequest = Register_pb2.RegisterRequest(
+        client_id="butts",
+        meta=Register_pb2.ClientMetadata(addr="butter", port=27)
+    )
+    conf: Register_pb2.RegisterResponse = register_stub.RegisterClient(request=client_req)
+    print(conf)
+
+    client_req = Register_pb2.Client_ID = Register_pb2.Client_ID(
+        client_id="butts"
+    )
+    conf_2: Register_pb2.ClientResponse = register_stub.GetClientInfo(request=client_req)
+    print(conf_2)
 
 if __name__ == "__main__":
     main()
