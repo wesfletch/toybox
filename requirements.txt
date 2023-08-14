@@ -8,7 +8,7 @@ grpcio # gRPC
 grpcio-tools
 
 # general
-futures
+# futures
 
 # static type checking
 types-protobuf
