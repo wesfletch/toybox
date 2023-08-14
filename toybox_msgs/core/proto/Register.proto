@@ -10,6 +10,7 @@ service Register {
     rpc GetClientInfo(Client_ID) returns (ClientResponse) {}
 }
 
+// or just use context.peer()
 message ClientMetadata {
     required string addr = 1;
     required int32 port = 2;

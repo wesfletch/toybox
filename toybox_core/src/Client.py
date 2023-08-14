@@ -67,7 +67,7 @@ class ClientRPCServicer(ClientServicer):
         # and message type is correct
         if subscription.message_type != message_type:
             return Client_pb2.InformConfirmation(
-                return_code=1,
+                return_code=2,
                 status=f"Unexpected message type {message_type}, expected {subscription.message_type}"
             )
 
@@ -83,12 +83,18 @@ class Node():
         self,
         host: str = "localhost",
         port: int = 50505,
-        sock: Union[socket.socket,None] = None,
+        # sock: Union[socket.socket,None] = None,
     ) -> None:
+
+        self._shutdown: bool = False
 
         self._host: str = host
         self._port: int = port
-        self._socket: Union[socket.socket,None] = sock
+        # self._socket: Union[socket.socket,None] = sock
+        # if self._msg_socket is None:
+        self._msg_socket = socket.socket(family=socket.AF_INET, 
+                                         type=socket.SOCK_STREAM)
+        self._msg_socket.bind((self._host, get_available_port(host=self._host, start=self._port+1)))
 
         self._executor: futures.ThreadPoolExecutor = futures.ThreadPoolExecutor(
             max_workers=10
@@ -103,6 +109,10 @@ class Node():
         # listen for incoming connections in separate thread
         self.listen_thread: threading.Thread = threading.Thread(target=self.listen)
         self.listen_thread.start()
+
+        self.configure_rpc_servicer()
+
+        atexit.register(self.cleanup, self)
 
     def configure_rpc_servicer(self) -> None:
 
@@ -124,14 +134,14 @@ class Node():
     def listen(self) -> None:
 
         # enable socket to accept connections
-        self._socket.listen()
+        self._msg_socket.listen()
         # make socket non-blocking
-        self._socket.settimeout(0) 
+        self._msg_socket.settimeout(0) 
 
         # listen for new connections to add to list
-        while not is_shutdown():
+        while not self._shutdown:
             try:
-                conn, addr = self._socket.accept()
+                conn, addr = self._msg_socket.accept()
                 self._connections[conn] = Queue()
             except BlockingIOError:
                 pass
@@ -143,6 +153,14 @@ class Node():
         self
     ) -> None:
         pass
+
+    def cleanup(self) -> None:
+
+        self._shutdown = True
+
+        self._msg_socket.shutdown(socket.SHUT_RDWR)
+        self._msg_socket.close()
+
 
 class MessageHandshake():
     """
@@ -174,10 +192,11 @@ def port_in_use(port: int, host: str = 'localhost') -> bool:
     return False
 
 def get_available_port(
-    host: str = "localhost"
+    host: str = "localhost",
+    start: int = 50505
 ) -> int:
 
-    port: int = 50505
+    port: int = start
     while port_in_use(port=port, host=host):
         port += 1
     return port
@@ -194,7 +213,6 @@ def deinit_node(
 def init_node(
     name: str,
     address: Union[Tuple[str,int], None] = None,
-    # standalone: bool = False,
 ) -> Node:
     
     atexit.register(deinit_node, name)
@@ -206,22 +224,22 @@ def init_node(
     else:
         host, port = address
 
-    sock: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    if not port_in_use(port=port, host=host):
-        try:
-            sock.bind(address)
-        except socket.error as e:
-            # define custom exceptions/actually handle socket errors?
-            raise Exception(e)
+    # sock: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # if not port_in_use(port=port, host=host):
+    #     try:
+    #         sock.bind(address)
+    #     except socket.error as e:
+    #         # define custom exceptions/actually handle socket errors?
+    #         raise Exception(e)
         
+    node: Node = Node(host=host,
+                      port=port)
+    
     # if not standalone:
     # register ourselves with the master
     if not register_client_rpc(name=name, addr=address):
         print("we fucked up, I guess")
 
-    node: Node = Node(host=host,
-                      port=port,
-                      sock=sock)
     
     return node
 
