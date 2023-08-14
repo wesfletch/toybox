@@ -2,15 +2,20 @@ syntax = "proto2";
 
 package core;
 
-import "Message.proto";
+// import "Message.proto";
 import "Topic.proto";
-service ToClient {
+service Client {
 
+    // rpc SendMessage(Message) returns (Null) {}
+    // rpc InformOfSubscription(TopicDefinition) returns (Confirmation) {}
 
-    rpc SendMessage(Message) returns (Null) {}
-    rpc InformOfSubscription(TopicDefinition) returns (Confirmation) {}
-
+    rpc InformOfPublisher(TopicDefinition) returns (InformConfirmation) {}
     // rpc NegotiateConnection()
 }
 
 message Null {}
+
+message InformConfirmation {
+    required int32 return_code = 1;
+    optional string status = 2;
+}

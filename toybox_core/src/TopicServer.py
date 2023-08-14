@@ -13,8 +13,9 @@ sys.path.append('/home/dev/toybox')
 
 from toybox_msgs.core.Topic_pb2 import (
     TopicDefinition,
-    AdvertiseConfirmation,
-    Confirmation
+    Confirmation,
+    PublisherList,
+    SubscriberList,
 )
 from toybox_msgs.core.Topic_pb2_grpc import (
     TopicServicer, 
@@ -28,8 +29,8 @@ from toybox_core.src.RegisterServer import Client
 class Topic():
     name: str
     message_type: str 
-    publishers: List[Client] = field(default_factory=list)
-    subscribers: List[Client] = field(default_factory=list)
+    publishers: List[str] = field(default_factory=list)
+    subscribers: List[str] = field(default_factory=list)
 
 
 class TopicServicer(TopicServicer):
@@ -37,7 +38,11 @@ class TopicServicer(TopicServicer):
     def __init__(self, topics: Dict[str, Topic]):
         self._topics = topics
 
-    def AdvertiseTopic(self, request: TopicDefinition, context) -> AdvertiseConfirmation:
+    def AdvertiseTopic(
+        self, 
+        request: TopicDefinition, 
+        context
+    ) -> Confirmation:
         """
         IN: TopicDefiniton
         OUT: Confirmation
@@ -47,7 +52,7 @@ class TopicServicer(TopicServicer):
         topic_name: str = request.topic_name
         message_type: str = request.message_type
 
-        conf: AdvertiseConfirmation = AdvertiseConfirmation()
+        conf: Confirmation = Confirmation()
         conf.return_code = 0
         conf.topic.CopyFrom(request)
         conf.status: str = ""
@@ -58,21 +63,29 @@ class TopicServicer(TopicServicer):
             if len(self._topics.get(topic_name).publishers) > 0:
                 conf.return_code = 1
                 conf.status = "Topic already advertised."
-                return AdvertiseConfirmation(return_code=1,
+                return Confirmation(return_code=1,
                                     topic=request,
                                     status="Topic already advertised.")
             # if we have preemptive subscribers, we need to inform the publisher
             elif self._topics.get(topic_name).subscribers is not None:
-                conf.subscriber_list.extend(self._topics.get(topic_name).subscribers)
+                subscribed: List[str] = [x for x in self._topics.get(topic_name).subscribers]
+                subscribers: SubscriberList = SubscriberList(subscriber_id=subscribed)
+                conf.subscribers.CopyFrom(subscribers)
         else:   
             self._topics[topic_name] = Topic(name=topic_name,
                                             message_type=message_type,
                                             publishers=[uuid])
             conf.status = f"Topic <{topic_name}> advertised successfully."
         
+        print(self._topics)
+
         return conf
     
-    def SubscribeTopic(self, request: TopicDefinition, context) -> Confirmation:
+    def SubscribeTopic(
+        self, 
+        request: TopicDefinition, 
+        context
+    ) -> Confirmation:
         
         uuid: str = request.uuid
         topic_name: str = request.topic_name
@@ -88,7 +101,19 @@ class TopicServicer(TopicServicer):
                                              message_type=message_type,
                                              subscribers=[uuid])
         else:
-            self._topics[topic_name].subscribers.append(uuid)
+            if uuid in self._topics[topic_name].publishers:
+                conf.return_code = 1
+                conf.status = "You can't subscribe to a topic you're also publishing, dork."  
+            else:
+                self._topics[topic_name].subscribers.append(uuid)
+                
+                # send any declared publishers of this topic back to the subscriber
+                publishers = PublisherList(
+                    publisher_id=[x for x in self._topics.get(topic_name).publishers],
+                )
+                conf.publishers.CopyFrom(publishers)
+
+        print(self._topics)
 
         return conf
 
@@ -114,17 +139,56 @@ class TopicServer():
         # self._server.wait_for_termination()
 
 
+
+channel: grpc.insecure_channel = grpc.insecure_channel('localhost:50051')
+stub: TopicStub = TopicStub(channel=channel)
+
+def advertise_topic_rpc(
+    client_name: str,
+    topic_name: str,
+    message_type: str,
+) -> bool:
+
+    advertise_req: TopicDefinition = TopicDefinition(
+        uuid=client_name,
+        topic_name=topic_name,
+        message_type=message_type,
+    )
+
+    conf: Confirmation = stub.AdvertiseTopic(request=advertise_req)
+    print(conf)
+    return (conf.return_code == 0)
+
+def subscribe_topic_rpc(
+    client_name: str,
+    topic_name: str,
+    message_type: str,
+) -> Union[List[str], None]:
+    
+    subscribe_req: TopicDefinition = TopicDefinition(
+        uuid=client_name,
+        topic_name=topic_name,
+        message_type=message_type,
+    )
+
+    conf: Confirmation = stub.SubscribeTopic(request=subscribe_req)
+
+    assert conf.WhichOneof("client_list") == "publishers" 
+
+    return conf.publishers
+
+
 def main():
 
-    channel: grpc.insecure_channel = grpc.insecure_channel('localhost:50051')
-    stub: TopicStub = TopicStub(channel=channel)
+    # channel: grpc.insecure_channel = grpc.insecure_channel('localhost:50051')
+    # stub: TopicStub = TopicStub(channel=channel)
 
     advertise_req: TopicDefinition = TopicDefinition(
         uuid="1",
         topic_name="butts",
         message_type="butts"
     )
-    conf: AdvertiseConfirmation = stub.AdvertiseTopic(request=advertise_req)
+    conf: Confirmation = stub.AdvertiseTopic(request=advertise_req)
     print(conf)
 
     subscribe_req: TopicDefinition = TopicDefinition(
@@ -137,10 +201,10 @@ def main():
 
     advertise_req= TopicDefinition(
         uuid="1",
-        topic_name="butter",
+        topic_name="buttest",
         message_type="butter",
     )
-    conf: AdvertiseConfirmation = stub.AdvertiseTopic(request=advertise_req)
+    conf: Confirmation = stub.AdvertiseTopic(request=advertise_req)
     print(conf)
 
 if __name__ == "__main__":

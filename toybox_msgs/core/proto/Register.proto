@@ -3,13 +3,31 @@ syntax = "proto2";
 package core;
 
 service Register {
+    // refactor these to just use Client messages
     rpc RegisterClient(RegisterRequest) returns (RegisterResponse) {}
     rpc DeRegisterClient(DeRegisterRequest) returns (RegisterResponse) {}
+    
+    rpc GetClientInfo(Client_ID) returns (ClientResponse) {}
 }
 
 message ClientMetadata {
     required string addr = 1;
     required int32 port = 2;
+}
+
+message Client_ID {
+    required string client_id = 1;
+}
+
+message ClientInfo {
+    required string client_id = 1;
+    required ClientMetadata meta = 2;
+}
+
+message ClientResponse {
+    required int32 return_code = 1;
+    optional ClientInfo client = 2;
+    optional string status = 3;
 }
 
 message RegisterRequest {

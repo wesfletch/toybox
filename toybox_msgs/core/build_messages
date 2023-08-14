@@ -19,10 +19,10 @@ python3 -m grpc_tools.protoc \
 
 # as of Ubuntu20.04/Python3.8.10, gRPC improperly sets relative imports for *_grpc.py files
 # so, we're modifying them in place here
-for file in ./*_grpc.py; do
+for file in ./*pb2*.py; do
     # for lines containing "import <modulename> as "
     # replace 'import' with 'from . import'
-    sed -i -e  '/import [A-Za-z0-9_]* as/ s/import/from . import/g' "${file}"
+    sed -i -e  '/^import [A-Za-z0-9_]* as/ s/import/from . import/g' "${file}"
 done
 
 popd >> /dev/null || exit 1

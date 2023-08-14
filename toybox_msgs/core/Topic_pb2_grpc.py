@@ -17,7 +17,7 @@ class TopicStub(object):
         self.AdvertiseTopic = channel.unary_unary(
                 '/core.Topic/AdvertiseTopic',
                 request_serializer=Topic__pb2.TopicDefinition.SerializeToString,
-                response_deserializer=Topic__pb2.AdvertiseConfirmation.FromString,
+                response_deserializer=Topic__pb2.Confirmation.FromString,
                 )
         self.SubscribeTopic = channel.unary_unary(
                 '/core.Topic/SubscribeTopic',
@@ -47,7 +47,7 @@ def add_TopicServicer_to_server(servicer, server):
             'AdvertiseTopic': grpc.unary_unary_rpc_method_handler(
                     servicer.AdvertiseTopic,
                     request_deserializer=Topic__pb2.TopicDefinition.FromString,
-                    response_serializer=Topic__pb2.AdvertiseConfirmation.SerializeToString,
+                    response_serializer=Topic__pb2.Confirmation.SerializeToString,
             ),
             'SubscribeTopic': grpc.unary_unary_rpc_method_handler(
                     servicer.SubscribeTopic,
@@ -77,7 +77,7 @@ class Topic(object):
             metadata=None):
         return grpc.experimental.unary_unary(request, target, '/core.Topic/AdvertiseTopic',
             Topic__pb2.TopicDefinition.SerializeToString,
-            Topic__pb2.AdvertiseConfirmation.FromString,
+            Topic__pb2.Confirmation.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
