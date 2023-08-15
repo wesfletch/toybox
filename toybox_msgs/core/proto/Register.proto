@@ -14,6 +14,7 @@ service Register {
 message ClientMetadata {
     required string addr = 1;
     required int32 port = 2;
+    optional int32 data_port = 3;
 }
 
 message Client_ID {
