@@ -26,7 +26,8 @@ class Message():
 class Client():
     client_id: str
     addr: str
-    port: int
+    rpc_port: int
+    data_port: int
 
 class RegisterServicer(Register_pb2_grpc.RegisterServicer):
 
@@ -36,8 +37,10 @@ class RegisterServicer(Register_pb2_grpc.RegisterServicer):
     def RegisterClient(
         self, 
         request: Register_pb2.RegisterRequest, 
-        context
+        context: grpc.ServicerContext
     ) -> Register_pb2.RegisterResponse:
+
+        print(f'peer: {context.peer()}')
 
         client_id: str = request.client_id
         meta: Register_pb2.ClientMetadata = request.meta
@@ -51,7 +54,8 @@ class RegisterServicer(Register_pb2_grpc.RegisterServicer):
         self._clients[client_id] = Client(
             client_id=client_id, 
             addr=meta.addr,
-            port=meta.port
+            rpc_port=meta.port,
+            data_port=meta.data_port if meta.data_port else -1
         )
         print(self._clients)
         return Register_pb2.RegisterResponse(return_code=0)
@@ -97,7 +101,8 @@ class RegisterServicer(Register_pb2_grpc.RegisterServicer):
         
         response_client.client_id = client.client_id
         response_meta.addr = client.addr
-        response_meta.port = client.port
+        response_meta.port = client.rpc_port
+        response_meta.data_port = client.data_port
 
         response_client.meta.CopyFrom(response_meta)
         response.client.CopyFrom(response_client)
@@ -130,17 +135,15 @@ register_stub: Register_pb2_grpc.RegisterStub = Register_pb2_grpc.RegisterStub(c
 
 def register_client_rpc(
     name: str, 
-    addr: Tuple[str, int]
+    host: str,
+    port: int,
+    data_port: int = -1
 ) -> bool:
     
-    host: str
-    port: int
-    host, port = addr
-
     # build our request
     client_req: Register_pb2.RegisterRequest = Register_pb2.RegisterRequest(
         client_id=name,
-        meta=Register_pb2.ClientMetadata(addr=host, port=port)
+        meta=Register_pb2.ClientMetadata(addr=host, port=port, data_port=data_port)
     )
     result: Register_pb2.RegisterResponse = register_stub.RegisterClient(request=client_req)
     print(result)
@@ -149,6 +152,12 @@ def register_client_rpc(
 def deregister_client_rpc(
     name: str,
 ) -> bool:
+    
+    # check if the server is still up
+    try:
+        grpc.channel_ready_future(channel=channel).result(timeout=0)
+    except grpc.FutureTimeoutError:
+        return True
     
     req: Register_pb2.DeRegisterRequest = Register_pb2.DeRegisterRequest(
         client_id=name

@@ -2,8 +2,10 @@
 
 from abc import ABC
 import atexit
+from dataclasses import dataclass, field
 import errno
 from queue import Queue, Empty
+import select
 import socket
 import sys
 import threading
@@ -75,30 +77,37 @@ class ClientRPCServicer(ClientServicer):
         return Client_pb2.InformConfirmation(
             return_code=0,
         )
+    
+    # def InformOfShutdown(self, request, context):
+    #     pass
 
+@dataclass
+class Connection():
+    name: str
+    sock: socket.socket
+    host: str
+    port: int
+
+    inbound: "Queue[str]" = field(default_factory=Queue)
+    outbound: "Queue[str]" = field(default_factory=Queue)
 
 class Node():
 
     def __init__(
         self,
+        name: str,
         host: str = "localhost",
         port: int = 50505,
         # sock: Union[socket.socket,None] = None,
     ) -> None:
 
-        self._shutdown: bool = False
+        self._name = name
 
         self._host: str = host
         self._port: int = port
-        # self._socket: Union[socket.socket,None] = sock
-        # if self._msg_socket is None:
-        self._msg_socket = socket.socket(family=socket.AF_INET, 
-                                         type=socket.SOCK_STREAM)
-        self._msg_socket.bind((self._host, get_available_port(host=self._host, start=self._port+1)))
 
-        self._executor: futures.ThreadPoolExecutor = futures.ThreadPoolExecutor(
-            max_workers=10
-        )
+        # queue of messages for inbound and outbound connections
+        # self._connections: Dict[str, Connection] = {}
 
         self._inbound: Dict[socket.socket, Queue[str]] = {}
         self._outbound: Dict[socket.socket, Queue[str]] = {}
@@ -106,13 +115,29 @@ class Node():
         self._subscriptions: Dict[str, Topic] = {}
         self._others: List[str] = []
 
+        # open socket for message-passing between clients
+        self._msg_socket = socket.socket(family=socket.AF_INET, 
+                                         type=socket.SOCK_STREAM)
+        self._msg_port = get_available_port(host=self._host, start=self._port+1)
+        self._msg_socket.bind((self._host, self._msg_port))
+        self._msg_lock: threading.Lock = threading.Lock()
+
+        # flag for thread termination
+        self._shutdown: bool = False
+
         # listen for incoming connections in separate thread
         self.listen_thread: threading.Thread = threading.Thread(target=self.listen)
         self.listen_thread.start()
 
+        self.spin_thread: threading.Thread = threading.Thread(target=self.spin)
+        self.spin_thread.start()
+
+        self._executor: futures.ThreadPoolExecutor = futures.ThreadPoolExecutor(
+            max_workers=10
+        )
         self.configure_rpc_servicer()
 
-        atexit.register(self.cleanup, self)
+        atexit.register(self.cleanup)
 
     def configure_rpc_servicer(self) -> None:
 
@@ -132,6 +157,9 @@ class Node():
         self._server.start()
 
     def listen(self) -> None:
+        """
+        THREAD
+        """
 
         # enable socket to accept connections
         self._msg_socket.listen()
@@ -141,10 +169,16 @@ class Node():
         # listen for new connections to add to list
         while not self._shutdown:
             try:
-                conn, addr = self._msg_socket.accept()
-                self._connections[conn] = Queue()
+                with self._msg_lock:                
+                    conn, addr = self._msg_socket.accept()
+                    # add host to _others?
+                    self._inbound[conn] = Queue()
+
             except BlockingIOError:
-                pass
+                continue
+
+        self._msg_socket.shutdown(socket.SHUT_RDWR)
+        self._msg_socket.close()
 
     def handshake(self) -> None:
         pass
@@ -152,15 +186,28 @@ class Node():
     def spin(
         self
     ) -> None:
-        pass
+        
+        while not self._shutdown:
+
+            if not self._msg_lock.acquire(blocking=False):
+                continue
+
+            # get available [in/out]bound sockets
+            ready_to_read, ready_to_write, _ = select.select(self._inbound.keys(), 
+                                                             self._outbound.keys(), 
+                                                             [], 0)
+
+            for conn in ready_to_read:
+                received: str = ""            
+                while not "\n" in received:
+                    chunk: bytes = conn.recv(32768)
+                    # chunks.append(chunk)
+                    received += chunk.decode('utf-8')
+                
 
     def cleanup(self) -> None:
 
         self._shutdown = True
-
-        self._msg_socket.shutdown(socket.SHUT_RDWR)
-        self._msg_socket.close()
-
 
 class MessageHandshake():
     """
@@ -224,23 +271,17 @@ def init_node(
     else:
         host, port = address
 
-    # sock: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    # if not port_in_use(port=port, host=host):
-    #     try:
-    #         sock.bind(address)
-    #     except socket.error as e:
-    #         # define custom exceptions/actually handle socket errors?
-    #         raise Exception(e)
-        
-    node: Node = Node(host=host,
+    node: Node = Node(name=name, 
+                      host=host, 
                       port=port)
-    
-    # if not standalone:
+
     # register ourselves with the master
-    if not register_client_rpc(name=name, addr=address):
+    if not register_client_rpc(name=node._name, 
+                               host=node._host,
+                               port=node._port,
+                               data_port=node._msg_port):
         print("we fucked up, I guess")
 
-    
     return node
 
 def advertise_topic(
