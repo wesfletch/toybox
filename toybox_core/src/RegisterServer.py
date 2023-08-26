@@ -3,10 +3,11 @@
 from abc import ABC
 from dataclasses import dataclass, field
 import sys
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 
 import grpc
 import concurrent.futures as futures
+import threading
 
 # stupid hack because pip is the worst
 sys.path.append('/home/dev/toybox')
@@ -40,7 +41,7 @@ class RegisterServicer(Register_pb2_grpc.RegisterServicer):
         context: grpc.ServicerContext
     ) -> Register_pb2.RegisterResponse:
 
-        print(f'peer: {context.peer()}')
+        # print(f'peer: {context.peer()}')
 
         client_id: str = request.client_id
         meta: Register_pb2.ClientMetadata = request.meta
@@ -57,7 +58,7 @@ class RegisterServicer(Register_pb2_grpc.RegisterServicer):
             rpc_port=meta.port,
             data_port=meta.data_port if meta.data_port else -1
         )
-        print(self._clients)
+        # print(self._clients)
         return Register_pb2.RegisterResponse(return_code=0)
 
     def DeRegisterClient(
@@ -75,7 +76,7 @@ class RegisterServicer(Register_pb2_grpc.RegisterServicer):
             )
         
         del self._clients[client_id]
-        print(self._clients)
+        # print(self._clients)
         
         return Register_pb2.RegisterResponse(return_code=0)
     
@@ -96,7 +97,7 @@ class RegisterServicer(Register_pb2_grpc.RegisterServicer):
             return response
         
         # build the response
-        response_client = Register_pb2.Client()
+        response_client = Register_pb2.ClientInfo()
         response_meta = Register_pb2.ClientMetadata()
         
         response_client.client_id = client.client_id
@@ -111,6 +112,8 @@ class RegisterServicer(Register_pb2_grpc.RegisterServicer):
 
         return response
 
+channel: grpc.insecure_channel = grpc.insecure_channel('localhost:50051')
+register_stub: Register_pb2_grpc.RegisterStub = Register_pb2_grpc.RegisterStub(channel=channel)
 
 class RegisterServer():
     
@@ -129,9 +132,12 @@ class RegisterServer():
         self._server.add_insecure_port('[::]:50051')
         
         self._server.start()
+    
+    def stop(self, grace: Union[float,None]) -> None: 
+        
+        stopping: threading.Event = self._server.stop(grace=grace)
+        stopping.wait()
 
-channel: grpc.insecure_channel = grpc.insecure_channel('localhost:50051')
-register_stub: Register_pb2_grpc.RegisterStub = Register_pb2_grpc.RegisterStub(channel=channel)
 
 def register_client_rpc(
     name: str, 
@@ -146,7 +152,7 @@ def register_client_rpc(
         meta=Register_pb2.ClientMetadata(addr=host, port=port, data_port=data_port)
     )
     result: Register_pb2.RegisterResponse = register_stub.RegisterClient(request=client_req)
-    print(result)
+    # print(result)
     return (result.return_code == 0)
 
 def deregister_client_rpc(
@@ -163,7 +169,7 @@ def deregister_client_rpc(
         client_id=name
     )
     result: Register_pb2.RegisterResponse = register_stub.DeRegisterClient(request=req)
-    print(result)
+    # print(result)
     return (result.return_code == 0)
 
 def get_client_info_rpc(
@@ -176,7 +182,7 @@ def get_client_info_rpc(
     result: Register_pb2.ClientResponse = register_stub.GetClientInfo(request=client_req)
     print(result)
 
-    # return result
+    return result.client
 
 
 def main():

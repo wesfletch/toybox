@@ -42,7 +42,8 @@ class Test_ClientServicer(unittest.TestCase):
         add_ClientServicer_to_server(
             server=self._server,
             servicer=ClientRPCServicer(subscriptions=self._subscriptions,
-                                       others=self._others)
+                                    #    others=self._others,
+                                       )
         )
         self._server.start()
 

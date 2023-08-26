@@ -32,6 +32,7 @@ class Topic():
     publishers: List[str] = field(default_factory=list)
     subscribers: List[str] = field(default_factory=list)
 
+    callbacks: List[Callable] = field(default_factory=list)
 
 class TopicServicer(TopicServicer):
 
@@ -77,7 +78,7 @@ class TopicServicer(TopicServicer):
                                             publishers=[uuid])
             conf.status = f"Topic <{topic_name}> advertised successfully."
         
-        print(self._topics)
+        # print(self._topics)
 
         return conf
     
@@ -113,7 +114,7 @@ class TopicServicer(TopicServicer):
                 )
                 conf.publishers.CopyFrom(publishers)
 
-        print(self._topics)
+        # print(self._topics)
 
         return conf
 
@@ -156,7 +157,7 @@ def advertise_topic_rpc(
     )
 
     conf: Confirmation = stub.AdvertiseTopic(request=advertise_req)
-    print(conf)
+    # print(conf)
     return (conf.return_code == 0)
 
 def subscribe_topic_rpc(
@@ -173,10 +174,12 @@ def subscribe_topic_rpc(
 
     conf: Confirmation = stub.SubscribeTopic(request=subscribe_req)
 
-    assert conf.WhichOneof("client_list") == "publishers" 
-
-    return conf.publishers
-
+    if not conf.HasField("client_list"):
+        return None
+    elif conf.whichOneof("client_list") != "publishers":
+        return None
+    else:
+        return [x.publisher_id for x in conf.publishers]
 
 def main():
 

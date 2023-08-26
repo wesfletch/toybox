@@ -3,6 +3,8 @@ syntax = "proto2";
 package core;
 
 import "Topic.proto";
+import "Register.proto";
+
 service Client {
 
     rpc InformOfPublisher(TopicDefinition) returns (InformConfirmation) {}
