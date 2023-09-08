@@ -100,6 +100,11 @@ class Connection():
 
     in_lock: threading.Lock = threading.Lock()
 
+    def connect(self):
+
+        self.sock.connect((self.host, self.port))
+        self.initialized = True
+
     def wait_for_inbound(self, blocking: bool = True) -> bool:
         """Test synchronization"""
         if blocking:
@@ -231,12 +236,13 @@ class Node():
                                                              [], 0)
             self._msg_lock.release()
 
-            for conn in ready_to_read:
+            for conn in ready_to_read:    
+                print(f'{self._name} just got a message maybe, on socket {ready_to_read}')
                 # unpack (L)ength -> first two bytes
                 data_len: int = struct.unpack("H", conn.recv(2))[0]
                 # receive (T)ype and (V)alue
                 received: bytes = conn.recv(data_len)
-
+                print("yeah, we got a message")
                 # self._connections[conn].inbound.put(message)
                 self.handle_message(conn, received)
 
@@ -264,6 +270,7 @@ class Node():
 
     def handle_message(self, conn: socket.socket, message: Union[bytes, None]) -> None:
 
+        print("fuck")
         # potentially unnecessary mutex
         self._connections[conn].in_lock.acquire()
 
@@ -271,7 +278,7 @@ class Node():
         message_type: bytes = msg_split[0].decode('utf-8').strip()
         message_data: bytes = b'\n' + b''.join(msg_split[1:])
 
-        # print(f'\n<{self._name}> received: \n\tmessage_type={message_type}\n\tmessage={message_data}')
+        print(f'\n<{self._name}> received: \n\tmessage_type={message_type}\n\tmessage={message_data}')
 
         # TODO: these should really be broken out into callbacks
         if message_type == "core.ClientInfo":
@@ -290,6 +297,8 @@ class Node():
             else:
                 print('already initialized')
                 return
+        elif message_type == "core.TopicDefinition":
+            print("fuckington") 
         else:
             # messages that aren't explicitly handled just go into the inbound queues
             self._connections[conn].inbound.put(message)
@@ -298,7 +307,7 @@ class Node():
 
     def send_message(
         self, 
-        conn: socket, 
+        conn: socket.socket, 
         message: Message
     ) -> None:
         """
@@ -347,7 +356,6 @@ class Node():
             conn_port: int = conn.getsockname()[1]
             sock.connect((conn_host, conn_port))
 
-            # self._msg_socket.connect((conn_host, conn_port))
             self._connections[sock] = Connection(
                 name=other_client,
                 sock=sock,
@@ -355,8 +363,11 @@ class Node():
                 port=sock.getpeername()[1],
                 initialized=True
             )
-            
-        self.send_message(conn=sock, message=intro_msg)
+        elif not self._connections[conn].initialized:
+            self._connections[conn].connect()
+            print("aaaaa fuck")
+        
+        self.send_message(conn=self._connections[conn].sock, message=intro_msg)
 
     def subscribe(
         self,
@@ -365,6 +376,7 @@ class Node():
         callback_fn: Callable
     ) -> bool:
     
+        # request information about publishers of a specific topic
         try:
             publishers: Union[List[str],None] = subscribe_topic_rpc(
                 client_name=self._name,
@@ -374,6 +386,8 @@ class Node():
             print(f"that didn't work: {rpc_error}")
             return False
         
+        # print(f'these are the publishers {publishers}')
+
         topic: Topic = Topic(
             name=topic_name,
             message_type=message_type,
@@ -381,27 +395,65 @@ class Node():
         )
         topic.callbacks.append(callback_fn)
 
-        if topic.publishers is not None:
-            for publisher in topic.publishers:
-                # we don't need to request info if we already have it
-                if self.get_connection(publisher) is not None:
-                    continue
+        if topic.publishers is None:
+            print('exiting early')
+            return True
 
-                publisher_info: Register_pb2.ClientInfo = get_client_info_rpc(publisher)
-                publisher_conn: Connection = Connection(
-                    name=publisher,
-                    sock=socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM),
-                    host=publisher_info.meta.addr,
-                    port=publisher_info.meta.data_port,
-                    initialized=False
+        # if topic.publishers is not None:
+        for publisher in topic.publishers:
+            # we don't need to request info if we already have it
+            if self.get_connection(publisher) is not None:
+                continue
+
+            publisher_info: Register_pb2.ClientInfo = get_client_info_rpc(publisher)
+            # print(f'this is the publisher_info: {publisher_info}')
+            publisher_conn: Connection = Connection(
+                name=publisher,
+                sock=socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM),
+                host=publisher_info.meta.addr,
+                port=publisher_info.meta.data_port,
+                initialized=False
+            )
+            self._connections[publisher_conn.sock] = publisher_conn
+            # print(f'this is the connection: {self._connections[publisher_conn.sock]}')
+
+        # introduce ourself to the publisher(s)
+        for publisher in topic.publishers:
+            if not self.get_connection(publisher).initialized:
+                self.introduce(
+                    other_client=publisher, 
+                    conn=self.get_connection(publisher).sock
                 )
-                self._connections[publisher_conn.sock] = publisher_conn
+        
+        # request a subscription from the publisher(s)
+        for publisher in topic.publishers:
+            self.request_subscription(
+                topic=topic,
+                publisher=publisher
+            )
 
         self._subscriptions[topic.name] = topic
 
         return True
     
-    def advertiseTopic(
+    def request_subscription(
+        self,
+        topic: Topic,
+        publisher: str
+    ) -> None:
+        
+        # create a TopicDefinition message
+        subscribe_req: TopicDefinition = TopicDefinition(
+            uuid=self._name,
+            topic_name=topic.name,
+            message_type=topic.message_type,
+        )
+        self.send_message(
+            conn=self.get_connection(publisher).sock,
+            message=subscribe_req
+        )
+
+    def advertise_topic(
         self,
         topic_name: str,
         message_type: str
