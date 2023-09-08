@@ -176,10 +176,10 @@ def subscribe_topic_rpc(
 
     if not conf.HasField("client_list"):
         return None
-    elif conf.whichOneof("client_list") != "publishers":
+    elif conf.WhichOneof("client_list") != "publishers":
         return None
     else:
-        return [x.publisher_id for x in conf.publishers]
+        return [x for x in conf.publishers.publisher_id]
 
 def main():
 

@@ -32,4 +32,3 @@ message Confirmation {
         PublisherList publishers = 5;
     }
 }
-

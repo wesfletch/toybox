@@ -242,23 +242,53 @@ class Test_Node_IPC(unittest.TestCase):
 
         # and now the introduction should be complete
         self.assertTrue(self._node_A.get_connection(name=self._node_B._name) is not None)
-
+        self.assertTrue(self._node_A.get_connection("node_B").initialized)
+        self.assertTrue(self._node_B.get_connection("node_A").initialized)
+        
     def test_subscribe_to_unpublished(self) -> None:
 
         result: bool = self._node_B.subscribe(
             topic_name="test_topic",
             message_type="test",
-            callback_fn=None)
-        
+            callback_fn=None
+        )
+
         self.assertTrue(result)
 
         # make sure that the servicer has the right info
 
         # make sure that the node has the right info
 
+    def test_subscribe_to_advertised(self) -> None:
+
+        print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+
+        # first, advertise a topic with node_A
+        result: bool = self._node_A.advertise_topic(
+            topic_name="test_topic",
+            message_type="test"
+        )
+        self.assertTrue(result)
+
+        print("attempting to subscribe")
+        # once that topic is advertised, attempt to subscribe with B
+        result: bool = self._node_B.subscribe(
+            topic_name="test_topic",
+            message_type="test",
+            callback_fn=None
+        )
+        self.assertTrue(result)
+
+        self._node_A.wait_for_connections()
+        self._node_A.wait_for_initialized()
+
+        print("fuckaroo")
+        self._node_A.get_connection("node_B").wait_for_inbound()
+        
+
     def test_advertise_to_unsubscribed(self) -> None:
 
-        result: bool = self._node_A.advertiseTopic(
+        result: bool = self._node_A.advertise_topic(
             topic_name="test_topic",
             message_type="test"
         )
