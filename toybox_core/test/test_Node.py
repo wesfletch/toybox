@@ -18,12 +18,20 @@ from toybox_msgs.core.Client_pb2_grpc import (
     ClientStub,
     add_ClientServicer_to_server,
 )
-from toybox_core.src.Client import (
+from toybox_core.src.ClientServer import (
     ClientRPCServicer,
+)
+
+from toybox_core.src.Connection import (
     Connection,
+)
+
+from toybox_core.src.Node import (
     Node,
+    get_available_port
+)
+from toybox_core.src.Client import (
     init_node,
-    get_available_port,
 )
 
 from toybox_msgs.core.Topic_pb2_grpc import (
@@ -244,7 +252,25 @@ class Test_Node_IPC(unittest.TestCase):
         self.assertTrue(self._node_A.get_connection(name=self._node_B._name) is not None)
         self.assertTrue(self._node_A.get_connection("node_B").initialized)
         self.assertTrue(self._node_B.get_connection("node_A").initialized)
-        
+    
+    def test_hashing_sockets(self) -> None:
+
+        sock_B_hash: int = hash(self._node_B._msg_socket)
+        print(self._node_B._msg_socket)
+        print(sock_B_hash)
+
+        remote_b_socket: socket.socket = socket.socket(
+            family=socket.AF_INET,
+            type=socket.SOCK_STREAM
+        )
+        remote_b_socket.connect((
+            self._node_B._msg_socket.getsockname()[0],
+            self._node_B._msg_socket.getsockname()[1]
+        ))
+
+        remote_B_hash: int = hash(remote_b_socket)
+        print(remote_B_hash)
+
     def test_subscribe_to_unpublished(self) -> None:
 
         result: bool = self._node_B.subscribe(
@@ -259,9 +285,8 @@ class Test_Node_IPC(unittest.TestCase):
 
         # make sure that the node has the right info
 
+    # @unittest.skip('for now')
     def test_subscribe_to_advertised(self) -> None:
-
-        print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
 
         # first, advertise a topic with node_A
         result: bool = self._node_A.advertise_topic(
@@ -278,13 +303,17 @@ class Test_Node_IPC(unittest.TestCase):
             callback_fn=None
         )
         self.assertTrue(result)
+        self._node_B.wait_for_initialized()
+        b_conn_a: Connection = self._node_B.get_connection(name="node_A", blocking=True)
+        b_conn_a.wait_for_outbound()
 
+        print("bbb")
         self._node_A.wait_for_connections()
+        print('ccc')
         self._node_A.wait_for_initialized()
 
         print("fuckaroo")
         self._node_A.get_connection("node_B").wait_for_inbound()
-        
 
     def test_advertise_to_unsubscribed(self) -> None:
 
