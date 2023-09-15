@@ -4,15 +4,9 @@ package core;
 
 service Topic {
 
-    rpc AdvertiseTopic(TopicDefinition) returns (Confirmation) {}
-    rpc SubscribeTopic(TopicDefinition) returns (Confirmation) {}
+    rpc AdvertiseTopic(AdvertiseRequest) returns (Confirmation) {}
+    rpc SubscribeTopic(TopicDefinition) returns (SubscribeResponse) {}
 
-}
-
-message TopicDefinition {
-    required string uuid = 1;
-    required string topic_name = 2;
-    required string message_type = 3;
 }
 
 message SubscriberList {
@@ -24,11 +18,42 @@ message PublisherList {
 }
 
 message Confirmation {
-    required int32 return_code = 1;
-    required TopicDefinition topic = 2;
+    required string uuid = 1;
+    required int32 return_code = 2;
     optional string status = 3;
-    oneof client_list {
-        SubscriberList subscribers = 4;
-        PublisherList publishers = 5;
-    }
 }
+
+message TopicDefinition {
+    required string uuid = 1;
+    required string topic_name = 2;
+    required string message_type = 3;
+}
+
+message AdvertiseRequest {
+    required string client_id = 1;
+    required TopicDefinition topic_def = 2;
+}
+
+message SubscribeResponse {
+    required Confirmation confirmation = 1;
+    repeated string publisher_list = 2;
+}
+
+message SubscriptionRequest {
+    required TopicDefinition topic_def = 1;
+}
+
+message SubscriptionResponse {
+    required Confirmation conf = 1;
+    required TopicDefinition topic_def = 2;
+    required int32 topic_port = 3;
+}
+
+// message TopicConfirmation {
+//     required Confirmation conf = 1;
+//     required TopicDefinition topic = 2;
+//     oneof client_list {
+//         SubscriberList subscribers = 3;
+//         PublisherList publishers = 4;
+//     }
+// }

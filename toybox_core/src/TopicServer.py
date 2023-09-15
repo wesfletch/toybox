@@ -4,6 +4,7 @@ import os
 import sys
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Dict, List, Tuple, Union, Callable
+import uuid
 
 import concurrent.futures as futures
 import grpc
@@ -12,10 +13,10 @@ import grpc
 sys.path.append('/home/dev/toybox')
 
 from toybox_msgs.core.Topic_pb2 import (
+    AdvertiseRequest,
     TopicDefinition,
     Confirmation,
-    PublisherList,
-    SubscriberList,
+    SubscribeResponse,
 )
 from toybox_msgs.core.Topic_pb2_grpc import (
     TopicServicer, 
@@ -34,6 +35,8 @@ class Topic():
 
     callbacks: List[Callable] = field(default_factory=list)
 
+    confirmed: bool = False
+
 class TopicServicer(TopicServicer):
 
     def __init__(self, topics: Dict[str, Topic]):
@@ -41,82 +44,80 @@ class TopicServicer(TopicServicer):
 
     def AdvertiseTopic(
         self, 
-        request: TopicDefinition, 
+        request: AdvertiseRequest, 
         context
     ) -> Confirmation:
         """
-        IN: TopicDefiniton
+        IN: AdvertiseRequest
         OUT: Confirmation
         """
-
-        uuid: str = request.uuid
-        topic_name: str = request.topic_name
-        message_type: str = request.message_type
+        advertiser_id: str = request.client_id
+        topic_name: str = request.topic_def.topic_name
+        message_type: str = request.topic_def.message_type
 
         conf: Confirmation = Confirmation()
+        conf.uuid = "-"
         conf.return_code = 0
-        conf.topic.CopyFrom(request)
         conf.status: str = ""
 
         # check if this topic already exists
         if self._topics.get(topic_name) is not None:
             # for now, don't allow more than one publisher on a given topic
             if len(self._topics.get(topic_name).publishers) > 0:
-                conf.return_code = 1
-                conf.status = "Topic already advertised."
                 return Confirmation(return_code=1,
-                                    topic=request,
+                                    uuid="-",
                                     status="Topic already advertised.")
-            # if we have preemptive subscribers, we need to inform the publisher
-            elif self._topics.get(topic_name).subscribers is not None:
-                subscribed: List[str] = [x for x in self._topics.get(topic_name).subscribers]
-                subscribers: SubscriberList = SubscriberList(subscriber_id=subscribed)
-                conf.subscribers.CopyFrom(subscribers)
+            # # if we have preemptive subscribers, we need to inform the publisher
+            # elif self._topics.get(topic_name).subscribers is not None:
+            #     subscribed: List[str] = [x for x in self._topics.get(topic_name).subscribers]
+            #     subscribers: SubscriberList = SubscriberList(subscriber_id=subscribed)
+            #     conf.subscribers.CopyFrom(subscribers)
         else:   
             self._topics[topic_name] = Topic(name=topic_name,
                                             message_type=message_type,
-                                            publishers=[uuid])
+                                            publishers=[advertiser_id])
             conf.status = f"Topic <{topic_name}> advertised successfully."
         
-        # print(self._topics)
-
         return conf
     
     def SubscribeTopic(
         self, 
         request: TopicDefinition, 
         context
-    ) -> Confirmation:
-        
+    ) -> SubscribeResponse:
+        """
+        _summary_
+
+        Args:
+            request (TopicDefinition): _description_
+            context (_type_): _description_
+
+        Returns:
+            Confirmation: _description_
+        """
         uuid: str = request.uuid
         topic_name: str = request.topic_name
         message_type: str = request.message_type
 
-        # build our confirmation
-        conf: Confirmation = Confirmation()
-        conf.topic.CopyFrom(request)
-        conf.return_code: int = 0
+        # build our response
+        response: SubscribeResponse = SubscribeResponse()
+        response.confirmation.uuid = uuid
+        response.confirmation.return_code: int = 0
 
         if self._topics.get(topic_name) is None:
-            self._topics[topic_name] = Topic(name=topic_name,
-                                             message_type=message_type,
-                                             subscribers=[uuid])
+            self._topics[topic_name] = Topic(
+                name=topic_name,
+                message_type=message_type,
+                subscribers=[uuid]
+            )
         else:
-            if uuid in self._topics[topic_name].publishers:
-                conf.return_code = 1
-                conf.status = "You can't subscribe to a topic you're also publishing, dork."  
-            else:
-                self._topics[topic_name].subscribers.append(uuid)
-                
-                # send any declared publishers of this topic back to the subscriber
-                publishers = PublisherList(
-                    publisher_id=[x for x in self._topics.get(topic_name).publishers],
-                )
-                conf.publishers.CopyFrom(publishers)
+            self._topics[topic_name].subscribers.append(uuid)
+            
+            # send any declared publishers of this topic back to the subscriber
+            publishers = [x for x in self._topics.get(topic_name).publishers]         
+            response.publisher_list.extend(publishers)
 
-        # print(self._topics)
-
-        return conf
+        return response
 
 
 class TopicServer():
@@ -150,36 +151,29 @@ def advertise_topic_rpc(
     message_type: str,
 ) -> bool:
 
-    advertise_req: TopicDefinition = TopicDefinition(
-        uuid=client_name,
-        topic_name=topic_name,
-        message_type=message_type,
-    )
+    advertise_req: AdvertiseRequest = AdvertiseRequest()
+    advertise_req.client_id = client_name
+    advertise_req.topic_def.uuid = str(uuid.uuid4())
+    advertise_req.topic_def.topic_name = topic_name
+    advertise_req.topic_def.message_type = message_type
 
     conf: Confirmation = stub.AdvertiseTopic(request=advertise_req)
-    # print(conf)
     return (conf.return_code == 0)
 
 def subscribe_topic_rpc(
-    client_name: str,
     topic_name: str,
     message_type: str,
 ) -> Union[List[str], None]:
     
     subscribe_req: TopicDefinition = TopicDefinition(
-        uuid=client_name,
+        uuid=str(uuid.uuid4()),
         topic_name=topic_name,
         message_type=message_type,
     )
 
-    conf: Confirmation = stub.SubscribeTopic(request=subscribe_req)
+    response: SubscribeResponse = stub.SubscribeTopic(request=subscribe_req)
 
-    if not conf.HasField("client_list"):
-        return None
-    elif conf.WhichOneof("client_list") != "publishers":
-        return None
-    else:
-        return [x for x in conf.publishers.publisher_id]
+    return [x for x in response.publisher_list]
 
 def main():
 
