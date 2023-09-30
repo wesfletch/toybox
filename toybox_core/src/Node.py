@@ -49,6 +49,8 @@ from toybox_msgs.core.Client_pb2_grpc import (
 )
 import toybox_msgs.core.Topic_pb2 as Topic_pb2
 
+from toybox_core.src.Logging import LOG
+
 class Node():
 
     def __init__(
@@ -88,6 +90,8 @@ class Node():
         self.spin_thread: threading.Thread = threading.Thread(target=self.spin)
         self.spin_thread.start()
 
+        self._threads: List[threading.Thread] = []
+
         self._executor: futures.ThreadPoolExecutor = futures.ThreadPoolExecutor(
             max_workers=10
         )
@@ -121,13 +125,13 @@ class Node():
         # enable socket to accept connections
         self._msg_socket.listen()
         # make socket non-blocking
-        self._msg_socket.settimeout(0) 
+        self._msg_socket.settimeout(0)
 
         # listen for new connections to add to list
         while not self._shutdown:
             try:
                 conn, addr = self._msg_socket.accept()
-                print(f"{self._name} accepted conn request from {conn}")
+                LOG("DEBUG", f"<{self._name}> accepted conn request from {conn.getpeername()}")
                 with self._msg_lock:                
                     self._connections[conn] = Connection(
                         name="",
@@ -152,7 +156,6 @@ class Node():
         ready_to_write: List[socket.socket] = []
         
         while not self._shutdown:
-
             if not self._msg_lock.acquire(blocking=False):
                 continue
 
@@ -166,16 +169,22 @@ class Node():
                 self.read(conn=conn)
 
             for conn in ready_to_write:
-                # we can't trust un-initialized connections to behave
-                if not self._connections[conn].initialized:
+
+                connection: Union[Connection,None] = self.connections.get(conn, None)
+                if connection is None:
+                    # connection might have been deleted by another thread
+                    continue
+               
+                elif connection.initialized == False:
+                    # we can't trust un-initialized connections to behave
                     continue
 
                 try:
-                    message: str = self._connections[conn].outbound.get(block=False)
+                    message: bytes = self._connections[conn].outbound.get(block=False)
                 except Empty:
                     continue
-                
-                # print(f"{self._name} sent message to {self._connections[conn].name}")
+
+                LOG("DEBUG", f"<{self._name}> sent message to {self._connections[conn].name}: {message}")
                 self._connections[conn].sock.sendall(message)
 
             # # handle subscriptions
@@ -197,8 +206,18 @@ class Node():
         conn: socket.socket,
     ) -> None:
         
+        len_bytes: bytes
+        try:
+            len_bytes = conn.recv(2)
+        except socket.error as e:
+            if e.errno == 107: # transport endpoint not connected
+                with self._msg_lock:
+                    LOG("DEBUG", f"transport client {self._connections[conn].sock} disconnected.")
+                    del self._connections[conn]
+            return None
+
         # unpack (L)ength -> first two bytes
-        data_len: int = struct.unpack("H", conn.recv(2))[0]
+        data_len: int = struct.unpack("H", len_bytes)[0]
         # receive (T)ype and (V)alue
         received: bytes = conn.recv(data_len)
 
@@ -208,47 +227,52 @@ class Node():
     def handle_message(
         self, 
         conn: socket.socket, 
-        message: Union[bytes, None]
+        message: bytes,
     ) -> None:
-
-        # potentially unnecessary mutex
-        self._connections[conn].in_lock.acquire()
 
         msg_split = message.splitlines(keepends=True)
         message_type: str = msg_split[0].decode('utf-8')
         message_type = message_type.rstrip('\n')
         message_data: bytes = b'\n' + b''.join(msg_split[1:])
 
-        print(f'\n<{self._name}> received: \n\tmessage_type=<{message_type}>\n\tmessage={message_data}')
+        # dispatch subscribed messages to their appropriate callbacks
+        topic: [Topic,None] = self._connections.get(conn, None).topic
+        if topic is not None:
+            # ensure that this is the correct
+            if message_type != topic.message_type:
+                LOG("ERR", f"message type <{message_type}> doesn't match topic message type <{topic.message_type}>")
+                return
+            if topic.callback is None:
+                LOG("INFO", "NO CALLBACK DECLARED")
+                return
 
-        # if this is part of a currently running transaction, pass it to the transaction to handle
+        LOG("DEBUG",f'<{self._name}> received: \n\tmessage_type=<{message_type}>\n\tmessage={message_data!r}')
 
-        print(f"{self._name}: message_type = <{message_type}>")
         # TODO: these should really be broken out into callbacks
         if message_type == "core.ClientInfo":
             # this is another client introducing themselves
-            
             client_info: Register_pb2.ClientInfo = Register_pb2.ClientInfo()
             try:
                 client_info.ParseFromString(message_data)
             except DecodeError as e:
-                print(f"We just got garbage: {e}")
+                LOG("ERR", f"We just got garbage: {e}")
                 return
             
             if not self._connections[conn].initialized:
+                LOG("DEBUG", f"{self._name} initializing connection with {client_info.client_id}")
                 self._connections[conn].name = client_info.client_id
                 self._connections[conn].initialized = True
             else:
-                print('already initialized')
+                LOG("DEBUG", "already initialized")
                 return
-        
+            
         elif message_type == "core.SubscriptionRequest":
 
             sub_request: Topic_pb2.SubscriptionRequest = Topic_pb2.SubscriptionRequest()
             try:
                 sub_request.ParseFromString(message_data)
             except DecodeError as e:
-                print(f"We just got garbage: {e}")
+                LOG("ERR",f"We just got garbage: {e}")
                 return
 
             sub_topic_name: str = sub_request.topic_def.topic_name
@@ -269,15 +293,25 @@ class Node():
 
             # create a publisher connection
             topic_connection: Connection = Connection(
-                name=f"{sub_topic_name}_publisher_{str(uuid.uuid1())}",
+                name=f"{self._name}_publisher_{str(uuid.uuid1())}",
                 sock=socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM),
                 host=self._host,
                 port=get_available_port(host=self._host, start=self._msg_port),
                 topic=self._publications[sub_topic_name],
             )
+            topic_connection.sock.bind((topic_connection.host, topic_connection.port))
+
             self._connections[topic_connection.sock] = topic_connection
             # and inform our subscriber of what port to connect to
-            response.topic_port = topic_connection.port
+            response.topic_pub_name = topic_connection.name
+            response.topic_port = topic_connection.sock.getsockname()[1]
+
+            # create thread for our new socket
+            pub_thread: threading.Thread = threading.Thread(target=self.publish_thread, args=topic_connection)
+            pub_thread.start()
+            self._threads.append(pub_thread)
+
+            self._publications[sub_topic_name] = topic_connection.topic
 
             self.send_message(
                 conn=conn, 
@@ -286,24 +320,54 @@ class Node():
             )
 
         elif message_type == "core.SubscriptionResponse":
-            print("fuck yeah")
             
+            sub_response: Topic_pb2.SubscriptionResponse = Topic_pb2.SubscriptionResponse()
+            try:
+                sub_response.ParseFromString(message_data)
+            except DecodeError as e:
+                LOG("ERR",f"We just got garbage: {e}")
+                return
+
+            LOG("DEBUG", f"<{self._name}> confirmed topic <\'{sub_response.topic_def.topic_name}\'>")
+            
+            # create subscriber connection for receiving messages on topic
+            new_conn: Connection = Connection(
+                name=sub_response.topic_pub_name,
+                sock=socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM),
+                host=self._connections.get(conn).host,
+                port=sub_response.topic_port,
+                topic=self._subscriptions.get(sub_response.topic_def.topic_name, None),
+            )
+            new_conn.connect()
+            self._connections[new_conn.sock] = new_conn
+
+            subscription: Union[Topic,None] = self._subscriptions.get(sub_response.topic_def.topic_name, None)
+            if subscription is None:
+                raise Exception("something is seriously wrong")
+            
+            # modify the topic with the publisher name and port, then attempt to connect
+            subscription.confirmed = True
+            if self._connections.get(conn).name in subscription.publishers:
+                subscription.publishers.remove(self._connections.get(conn).name)
+                subscription.publishers.append(new_conn.name)
+
+            print(self._subscriptions)
+
         elif message_type == "core.Confirmation":
             
             confirmation: Topic_pb2.Confirmation = Topic_pb2.Confirmation()
             try:
                 confirmation.ParseFromString(message_data)
             except DecodeError as e:
-                print(f"We just got garbage: {e}")
+                LOG("ERR", f"We just got garbage: {e}")
                 return
             
-            print(f"{self._name}: {confirmation}")
+            LOG("DEBUG", f"{self._name}: {confirmation}")
 
         else:
+            LOG("DEBUG", f"got unhandled message type: <{message_type}>")
             # messages that aren't explicitly handled just go into the inbound queues
-            self._connections[conn].inbound.put(message)
-
-        self._connections[conn].in_lock.release()
+            self._connections[conn].inbound.put(message.decode('utf-8'))
 
     def send_message(
         self, 
@@ -318,32 +382,39 @@ class Node():
         Args:
             conn (socket): connection to send message to
             message (Message): message (pb2) to send to `conn`
+            enqueue (bool): whether to enqueue message (respecting messsage queue),
+                            or send the message immediately
         """
 
         # pack (T)ype and (V)alue
-        print(f"sending <{message.DESCRIPTOR.full_name}>")
+        LOG("DEBUG", f"sending <{message.DESCRIPTOR.full_name}>")
         # message_type: bytes = "".join([message.DESCRIPTOR.full_name, "\n"]).encode('utf-8')
         message_type: bytes = message.DESCRIPTOR.full_name.encode('utf-8')
-        print(f"sending message type <{message_type}>")
+        LOG("DEBUG", f"sending message type <{message_type!r}>")
         message_bytes: bytes = message.SerializeToString()
 
         # prepend messages with (L)ength
         data_len = struct.pack("H", len(message_type) + len(message_bytes))
         
         # pack bytes
-        packed_message: bytearray = b""
+        packed_message: bytearray = bytearray()
         packed_message += data_len
         packed_message += message_type
         packed_message += message_bytes
 
-        print(f"{self._name} enqueued message for {self._connections[conn].name}: \
+        LOG("DEBUG", f"{self._name} enqueued message for {self._connections[conn].name}: \
               \ntype = <{repr(message.DESCRIPTOR.full_name)}>\n{message}")
         
         if enqueue:
             # place into outbound queue to be handled by spin()...
+            LOG("DEBUG", f"{self._name} enqueued message for {self._connections[conn].name}: \
+              \ntype = <{repr(message.DESCRIPTOR.full_name)}>\n{message}")
             self._connections[conn].outbound.put(packed_message)
+            LOG("DEBUG", f"<{self._name}> {self._connections[conn].outbound.queue}")
         else:
             # ... or just send it directly
+            LOG("DEBUG", f"{self._name} sent message direct to {self._connections[conn].name}: \
+              \ntype = <{repr(message.DESCRIPTOR.full_name)}>\n{message}")
             self._connections[conn].sock.sendall(packed_message)
 
     def introduce(
@@ -351,6 +422,8 @@ class Node():
         other_client: str, 
         conn: Union[socket.socket, None] = None
     ) -> None:
+
+        LOG("DEBUG", f"<{self._name}> introducing itself to <{other_client}>")
 
         # generate a ClientInfo message for this client
         intro_msg: Register_pb2.ClientInfo = Register_pb2.ClientInfo()
@@ -361,7 +434,8 @@ class Node():
         intro_msg.meta.CopyFrom(metadata)
 
         # ensure we're actually connected to `other_client`
-        if self.get_connection(other_client) is None:
+        connection: Union[Connection,None] = self.get_connection(other_client)
+        if connection is None:
             
             if conn is None:
                 raise Exception(f"No connection for Client <{other_client}>, and no connection info provided. Who is this???")
@@ -372,15 +446,32 @@ class Node():
                 host=conn.getsockname()[0],
                 port=conn.getsockname()[1]
             )
+            LOG("DEBUG", f"<{self._name}> attempting to connect() to {new_connection.name}")
             new_connection.connect()
             self._connections[new_connection.sock] = new_connection
 
-            print(f"{self._name}: {self.get_connection(other_client)}")
-        elif not self.get_connection(other_client).initialized:
-            self.get_connection(other_client).connect()
+            LOG("DEBUG", f"{self._name}: new connection {self.get_connection(other_client)}")
+            connection = new_connection
+
+        elif not connection.initialized:
+            connection.connect()
 
         # send the introduction message
-        self.send_message(conn=self.get_connection(other_client).sock, message=intro_msg)
+        self.send_message(conn=connection.sock, message=intro_msg)
+
+    def publish_thread(self, connection: Connection) -> None:
+
+        # enable socket to accept connections
+        connection.sock.listen()
+        # make socket non-blocking
+        connection.sock.settimeout(0)
+
+        while not self._shutdown:
+
+
+            time.sleep(0.001)
+
+
 
     def subscribe(
         self,
@@ -390,13 +481,13 @@ class Node():
     ) -> bool:
     
         # request information about publishers of a specific topic
-        print(f"{self._name} requesting topic information")
+        LOG("DEBUG", f"{self._name} requesting topic information")
         try:
             publishers: Union[List[str],None] = subscribe_topic_rpc(
                 topic_name=topic_name,
                 message_type=message_type)
         except grpc.RpcError as rpc_error:
-            print(f"that didn't work: {rpc_error}")
+            LOG("ERR", f"that didn't work: {rpc_error}")
             return False
         
         topic: Topic = Topic(
@@ -408,7 +499,7 @@ class Node():
         self._subscriptions[topic.name] = topic
 
         if topic.publishers is None:
-            print(f'{self._name} exiting early')
+            LOG("DEBUG", f'{self._name} exiting early')
             return True
 
         # get information on publishers from register server
@@ -426,13 +517,16 @@ class Node():
                 port=publisher_info.meta.data_port,
                 initialized=False
             )
-            print(f"{self._name} adding connection: {publisher_conn}")
+            LOG("DEBUG", f"{self._name} adding connection: {publisher_conn.name}")
             self._connections[publisher_conn.sock] = publisher_conn
             # print(f'this is the connection: {self._connections[publisher_conn.sock]}')
 
         # introduce ourself to the publisher(s)
         for publisher in topic.publishers:
-            if not self.get_connection(publisher).initialized:
+            connection: Union[Connection,None] = self.get_connection(publisher)
+            if connection is None:
+                LOG("ERR", "what are you talking about?")
+            elif not connection.initialized:
                 self.introduce(other_client=publisher)
         
         # request a subscription from the publisher(s)
@@ -456,11 +550,16 @@ class Node():
                 topic_name=topic.name,
                 message_type=topic.message_type,
             )
-        ) 
+        )
+
+        publisher_conn: Union[Connection,None] = self.get_connection(publisher)
+        if publisher_conn is None:
+            raise Exception("somethings fucked")
+        
         self.send_message(
-            conn=self.get_connection(publisher).sock,
+            conn=publisher_conn.sock,
             message=subscribe_req,
-            enqueue=False,
+            enqueue=True,
         )
         
     def advertise_topic(
@@ -476,7 +575,7 @@ class Node():
                 message_type=message_type
             )
         except grpc.RpcError as rpc_error:
-            print(f"that didn't work: {rpc_error}")
+            LOG("ERR", f"that didn't work: {rpc_error}")
             return False
 
         self._publications[topic_name] = Topic(
@@ -512,12 +611,20 @@ class Node():
         if blocking:
             while len(self._connections) == 0:
                 continue
-            return self.connections
+            return True
         else:
             return len(self._connections) != 0
     
-    def wait_for_initialized(self) -> bool:
+    def wait_for_initialized(self) -> None:
         """Test synchronization"""
         not_initialized: List[Connection] = [x for x in self._connections.values() if not x.initialized]
         while len(not_initialized) != 0:
-            not_initialized = [x.sock for x in self._connections.values() if not x.initialized]
+            with self._msg_lock:
+                not_initialized = [x for x in self._connections.values() if not x.initialized]
+
+    def wait_for_subscription(self, topic_name: str) -> None:
+        """Test synchronization"""
+        while self._subscriptions.get(topic_name, None) is None:
+            continue
+        while self._subscriptions.get(topic_name, None).confirmed == False:
+            continue

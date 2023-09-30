@@ -46,7 +46,8 @@ message SubscriptionRequest {
 message SubscriptionResponse {
     required Confirmation conf = 1;
     required TopicDefinition topic_def = 2;
-    required int32 topic_port = 3;
+    required string topic_pub_name = 3;
+    required int32 topic_port = 4;
 }
 
 // message TopicConfirmation {
