@@ -64,7 +64,7 @@ class RegisterServicer(Register_pb2_grpc.RegisterServicer):
     def DeRegisterClient(
         self, 
         request: Register_pb2.DeRegisterRequest, 
-        context
+        context: grpc.ServicerContext,
     ) -> Register_pb2.RegisterResponse:
 
         client_id: str = request.client_id
@@ -83,14 +83,14 @@ class RegisterServicer(Register_pb2_grpc.RegisterServicer):
     def GetClientInfo(
         self, 
         request: Register_pb2.Client_ID, 
-        context
+        context: grpc.ServicerContext,
     ) -> Register_pb2.ClientResponse:
 
         client_id: str = request.client_id
 
         response: Register_pb2.ClientResponse = Register_pb2.ClientResponse()
 
-        client: Client = self._clients.get(client_id, None)
+        client: Union[Client,None] = self._clients.get(client_id, None)
         if client is None:
             response.return_code = 1
             response.status = f"No client found for client_id <{client_id}>"
@@ -121,7 +121,7 @@ class RegisterServer():
         self._clients = clients
         self._servicer = RegisterServicer(clients=self._clients)
     
-    def serve(self):
+    def serve(self) -> None:
         
         self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
         Register_pb2_grpc.add_RegisterServicer_to_server(
@@ -180,12 +180,12 @@ def get_client_info_rpc(
         client_id=client_name
     )
     result: Register_pb2.ClientResponse = register_stub.GetClientInfo(request=client_req)
-    print(result)
+    # print(result)
 
     return result.client
 
 
-def main():
+def main() -> None:
 
     # channel: grpc.insecure_channel = grpc.insecure_channel('localhost:50051')
     # stub: Client_pb2_grpc.ClientStub = Client_pb2_grpc.ClientStub(channel=channel)

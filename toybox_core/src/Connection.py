@@ -51,7 +51,7 @@ class Connection():
     initialized: bool = False
 
     inbound: "Queue[str]" = field(default_factory=Queue)
-    outbound: "Queue[str]" = field(default_factory=Queue)
+    outbound: "Queue[bytes]" = field(default_factory=Queue)
 
     in_lock: threading.Lock = threading.Lock()
 
