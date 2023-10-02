@@ -197,10 +197,10 @@ def main() -> None:
     conf: Register_pb2.RegisterResponse = register_stub.RegisterClient(request=client_req)
     print(conf)
 
-    client_req = Register_pb2.Client_ID = Register_pb2.Client_ID(
+    client_id: Register_pb2.Client_ID = Register_pb2.Client_ID(
         client_id="butts"
     )
-    conf_2: Register_pb2.ClientResponse = register_stub.GetClientInfo(request=client_req)
+    conf_2: Register_pb2.ClientResponse = register_stub.GetClientInfo(request=client_id)
     print(conf_2)
 
 if __name__ == "__main__":

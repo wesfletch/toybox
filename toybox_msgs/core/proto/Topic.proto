@@ -5,7 +5,7 @@ package core;
 service Topic {
 
     rpc AdvertiseTopic(AdvertiseRequest) returns (Confirmation) {}
-    rpc SubscribeTopic(TopicDefinition) returns (SubscribeResponse) {}
+    rpc SubscribeTopic(TopicDefinition) returns (SubscriptionResponse) {}
 
 }
 
@@ -31,7 +31,9 @@ message TopicDefinition {
 
 message AdvertiseRequest {
     required string client_id = 1;
-    required TopicDefinition topic_def = 2;
+    required string host = 2;
+    required int32 topic_port = 3;
+    required TopicDefinition topic_def = 4;
 }
 
 message SubscribeResponse {
@@ -43,11 +45,16 @@ message SubscriptionRequest {
     required TopicDefinition topic_def = 1;
 }
 
+message PublisherInfo {
+    required string publisher_id = 1;
+    required string publisher_host = 2;
+    required int32 topic_port = 3;
+}
+
 message SubscriptionResponse {
     required Confirmation conf = 1;
     required TopicDefinition topic_def = 2;
-    required string topic_pub_name = 3;
-    required int32 topic_port = 4;
+    repeated PublisherInfo publisher_list = 3;
 }
 
 // message TopicConfirmation {

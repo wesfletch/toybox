@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 
+import grpc
 from typing import Dict, List, Union, Tuple, Callable
+
 from toybox_core.src.TopicServer import (
     Topic,
+)
+from toybox_core.src.Connection import (
+    Subscriber
 )
 
 import toybox_msgs.core.Client_pb2 as Client_pb2
@@ -21,26 +26,27 @@ class ClientRPCServicer(ClientServicer):
 
     def __init__(
         self, 
-        subscriptions: Dict[str, Topic],
-        # shutdown_flag: bool,
-        # others: List[str],
+        subscribers: List[Subscriber],
     ) -> None:
         
-        self._subscriptions = subscriptions
-        # self._shutdown_flag = shutdown_flag
-        # self._others = others
+        self._subscribers: List[Subscriber] = subscribers
+
 
     def InformOfPublisher(
         self, 
         request: TopicDefinition, 
-        context
+        context: grpc.ServicerContext,
     ) -> Client_pb2.InformConfirmation:
         
         publisher_uuid: str = request.uuid
         topic: str = request.topic_name
         message_type: str = request.message_type
 
-        subscription = self._subscriptions.get(topic, None)
+        # look to see if we have a subscriber that cares about this topic
+        subscription: Union[Subscriber,None] = None
+        for sub in self._subscribers:
+            if sub.topic.name == topic:
+                subscription = sub
 
         # first, make sure we actually care about this message
         if subscription is None:
@@ -49,13 +55,13 @@ class ClientRPCServicer(ClientServicer):
                 status="I don't think I asked for this."
             )
         # and message type is correct
-        if subscription.message_type != message_type:
+        if subscription.topic.message_type != message_type:
             return Client_pb2.InformConfirmation(
                 return_code=2,
                 status=f"Unexpected message type {message_type}, expected {subscription.message_type}"
             )
 
-        subscription.publishers.append(publisher_uuid)
+        subscription.add_publisher(publisher_uuid)
         return Client_pb2.InformConfirmation(
             return_code=0,
         )
