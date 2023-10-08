@@ -31,7 +31,6 @@ class ClientRPCServicer(ClientServicer):
         
         self._subscribers: List[Subscriber] = subscribers
 
-
     def InformOfPublisher(
         self, 
         request: TopicDefinition, 
@@ -55,7 +54,7 @@ class ClientRPCServicer(ClientServicer):
                 status="I don't think I asked for this."
             )
         # and message type is correct
-        if subscription.topic.message_type != message_type:
+        if subscription.topic.message_type.DESCRIPTOR.full_name != message_type:
             return Client_pb2.InformConfirmation(
                 return_code=2,
                 status=f"Unexpected message type {message_type}, expected {subscription.message_type}"

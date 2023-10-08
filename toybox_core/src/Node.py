@@ -21,34 +21,26 @@ import concurrent.futures as futures
 # stupid hack because pip is the worst
 sys.path.append('/home/dev/toybox')
 
-from toybox_core.src.ClientServer import (
-    ClientRPCServicer
-)
 from toybox_core.src.Connection import (
     Connection,
     Subscriber,
     Publisher,
-    # Transaction,
     get_available_port,
 )
 
 import toybox_msgs.core.Register_pb2 as Register_pb2
-from toybox_core.src.RegisterServer import (
-    register_client_rpc,
-    deregister_client_rpc,
-    get_client_info_rpc,
-)
 from toybox_core.src.TopicServer import (
-    advertise_topic_rpc,
     subscribe_topic_rpc,
     Topic,
 )
 
-import toybox_msgs.core.Client_pb2 as Client_pb2
+from toybox_core.src.ClientServer import (
+    ClientRPCServicer
+)
 from toybox_msgs.core.Client_pb2_grpc import (
-    ClientServicer,
     add_ClientServicer_to_server,
 )
+
 import toybox_msgs.core.Topic_pb2 as Topic_pb2
 
 from toybox_core.src.Logging import LOG
@@ -127,7 +119,8 @@ class Node():
 
     def listen(self) -> None:
         """
-        THREAD
+        Listen for "ephemeral" connections to this Node from other Nodes.
+        Ephemeral connections either go away quickly, or are transitioned to Subs/Pubs.
         """
 
         # enable socket to accept connections
@@ -153,21 +146,20 @@ class Node():
         self._msg_socket.shutdown(socket.SHUT_RDWR)
         self._msg_socket.close()
 
-    def handshake(self) -> None:
-        pass
-
     def spin(
         self
     ) -> None:
-        
+        """
+        Message-handling loop.
+        """
+
         ready_to_read: List[socket.socket] = []
         ready_to_write: List[socket.socket] = []
         
-        # service ephemeral connections, publishers, and subscribers in series
-        # a better(?) way to handle this would be spinning pubs/subs into their own self-contained threads 
+        # service ephemeral connections
         while not self._shutdown:
             
-            # service ephemeral connections
+            # acquire the "connection" mutex to ensure we don't read the list while it's changing
             if not self._conn_lock.acquire(blocking=False):
                 continue
 
@@ -178,8 +170,9 @@ class Node():
                                                              [], 0)
             self._conn_lock.release()
 
-            for conn in ready_to_read:    
-                self.read(conn=conn)
+            for conn in ready_to_read:
+                message: bytes = self._connections[conn].read(conn=conn)
+                self.handle_message(conn=conn, message=message)
 
             for conn in ready_to_write:
                 connection: Union[Connection,None] = self.connections.get(conn, None)
@@ -198,66 +191,24 @@ class Node():
                 LOG("DEBUG", f"<{self._name}> sent message to {self._connections[conn].name}: {message}")
                 self._connections[conn].sock.sendall(message)
 
-            # service publishers
-            publishers: List[socket.socket] = [x.sock for x in self.publishers]
-            _, ready_to_write, _ = select.select([], publishers,
-                                                 [], 0)
-            for publisher in ready_to_write:
-                pass
-
-            # service subscribers
-            subscribers: List[socket.socket] = [x.sock for x in self.subscribers]
-            ready_to_read, _, _ = select.select(subscribers, 
-                                                [], [], 0)
-            for subscriber in ready_to_read:
-                pass
-
             # TODO: need this to avoid all sorts of weird messaging order issues,
             #       should probably figure out why
             time.sleep(0.01)
-
-    def read(
-        self, 
-        conn: socket.socket,
-    ) -> None:
-        
-        try:
-            len_bytes: bytes = conn.recv(2)
-        except socket.error as e:
-            if e.errno == 107: # transport endpoint not connected
-                with self._conn_lock:
-                    LOG("DEBUG", f"transport client {self._connections[conn].sock} disconnected.")
-                    del self._connections[conn]
-            return None
-
-        # unpack (L)ength -> first two bytes
-        data_len: int = struct.unpack("H", len_bytes)[0]
-        # receive (T)ype and (V)alue
-        received: bytes = conn.recv(data_len)
-
-        self.handle_message(conn, received)
 
     def handle_message(
         self, 
         conn: socket.socket, 
         message: bytes,
     ) -> None:
+        """
+        TODO: awaiting refactor
 
-        msg_split = message.splitlines(keepends=True)
-        message_type: str = msg_split[0].decode('utf-8')
-        message_type = message_type.rstrip('\n')
-        message_data: bytes = b'\n' + b''.join(msg_split[1:])
+        Args:
+            conn (socket.socket): _description_
+            message (bytes): _description_
+        """
 
-        # dispatch subscribed messages to their appropriate callbacks
-        topic: Union[Topic,None] = self._connections.get(conn, None).topic
-        if topic is not None:
-            # ensure that this is the correct
-            if message_type != topic.message_type:
-                LOG("ERR", f"message type <{message_type}> doesn't match topic message type <{topic.message_type}>")
-                return
-            if topic.callback is None:
-                LOG("INFO", "NO CALLBACK DECLARED")
-                return
+        message_type, message_data = Connection.split_message(message)
 
         LOG("DEBUG",f'<{self._name}> received: \n\tmessage_type=<{message_type}>\n\tmessage={message_data!r}')
 
@@ -295,7 +246,11 @@ class Node():
             # messages that aren't explicitly handled just go into the inbound queues
             self._connections[conn].inbound.put(message.decode('utf-8'))
 
-    def configure_publisher(self, topic_name: str, message_type: str) -> Publisher:
+    def configure_publisher(
+        self, 
+        topic_name: str, 
+        message_type: str
+    ) -> Publisher:
 
         # create a publisher connection
         publisher: Publisher = Publisher(
@@ -332,7 +287,7 @@ class Node():
         self,
         topic_name: str,
         message_type: str,
-        callback_fn: Callable
+        callback_fn: Union[Callable,None] = None
     ) -> bool:
     
         # request information about publishers of a specific topic
@@ -345,7 +300,6 @@ class Node():
             LOG("ERR", f"that didn't work: {rpc_error}")
             return False
         
-        # TODO: actually do something even if a publisher isn't declared
         if len(publishers) == 0:
             LOG("DEBUG", f"no publishers declared for topic <{topic_name}>")
             self.configure_subscriber(
