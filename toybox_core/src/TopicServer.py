@@ -9,6 +9,7 @@ import uuid
 
 import concurrent.futures as futures
 import grpc
+from google.protobuf.message import Message
 
 # stupid hack because pip is the worst
 sys.path.append('/home/dev/toybox')
@@ -33,7 +34,7 @@ from toybox_core.src.Logging import LOG
 @dataclass
 class Topic():
     name: str
-    message_type: str 
+    message_type: Message 
     publishers: Dict[str, Tuple[str,int]] = field(default_factory=dict) # {client, port}
     subscribers: List[str] = field(default_factory=list)
 
@@ -130,7 +131,7 @@ class TopicRPCServicer(TopicServicer):
 
             for publisher in topic.publishers.keys():
                 
-                publisher_info: Union[int,None] = topic.publishers.get(publisher, None)
+                publisher_info: Union[Tuple[str,int],None] = topic.publishers.get(publisher, None)
                 if publisher_info is None:
                     raise Exception("something's wrong here") 
                 
@@ -150,7 +151,7 @@ class TopicServer():
 
         self.not_started: bool = True
 
-    def serve(self):
+    def serve(self) -> None:
         
         self._server: grpc.Server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
         add_TopicServicer_to_server(
@@ -161,7 +162,6 @@ class TopicServer():
         self._server.add_insecure_port('[::]:50051')
         
         self._server.start()
-        print("server started")
         self.not_started = False
         # self._server.wait_for_termination()
 
@@ -175,7 +175,7 @@ def advertise_topic_rpc(
     client_host: str,
     topic_port: int,
     topic_name: str,
-    message_type: str,
+    message_type: Message,
 ) -> bool:
 
     advertise_req: AdvertiseRequest = AdvertiseRequest()
@@ -184,7 +184,7 @@ def advertise_topic_rpc(
     advertise_req.topic_port = topic_port
     advertise_req.topic_def.uuid = str(uuid.uuid4())
     advertise_req.topic_def.topic_name = topic_name
-    advertise_req.topic_def.message_type = message_type
+    advertise_req.topic_def.message_type = message_type.DESCRIPTOR.full_name
 
     conf: Confirmation = stub.AdvertiseTopic(request=advertise_req)
     return (conf.return_code == 0)
@@ -192,7 +192,7 @@ def advertise_topic_rpc(
 def subscribe_topic_rpc(
     topic_name: str,
     message_type: str,
-) -> List[Tuple[str, int]]:
+) -> List[Tuple[str,str,int]]:
     
     subscribe_req: TopicDefinition = TopicDefinition(
         uuid=str(uuid.uuid4()),
@@ -201,13 +201,13 @@ def subscribe_topic_rpc(
     )
     response: SubscriptionResponse = stub.SubscribeTopic(request=subscribe_req)
 
-    returned: List[Tuple[str, int]] = []
+    returned: List[Tuple[str,str,int]] = []
     for publisher in response.publisher_list:
         returned.append((publisher.publisher_id, publisher.publisher_host, publisher.topic_port))
 
     return returned
 
-def main():
+def main() -> None:
 
     server: TopicServer = TopicServer()
     server_thread: threading.Thread = threading.Thread(target=server.serve)

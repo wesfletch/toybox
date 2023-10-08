@@ -33,3 +33,38 @@ def LOG(
         raise Exception(f"Invalid log level <{log_level}>")
 
     logger.log(log_levels[log_level], message)
+
+# rather than sub-classing logging.Logger like I should
+class TbxLogger():
+
+    log_levels: Dict[str, int] = {
+        "DEBUG":logging.DEBUG,
+        "INFO":logging.INFO,
+        "WARN":logging.WARNING,
+        "ERR":logging.ERROR,
+        "FATAL":logging.CRITICAL
+    }
+
+    def __init__(self, name: str) -> None:
+
+        self.logger: logging.Logger = logging.getLogger("tbx")
+        self.logger.setLevel(logging.DEBUG)
+
+        ch: logging.StreamHandler = logging.StreamHandler(stream=sys.stdout)
+        ch.setLevel(logging.DEBUG)
+        ch_fmt: logging.Formatter = logging.Formatter(fmt='[%(asctime)s.%(msecs)03d][%(name)s][%(levelname)s]: %(message)s',
+                                                    datefmt='%H:%M:%S')
+        ch.setFormatter(ch_fmt)
+
+        self.logger.addHandler(ch)
+
+    def LOG(
+        self,
+        log_level: str,
+        message: str
+    ) -> None:
+    
+        if log_level not in self.log_levels.keys():
+            raise Exception(f"Invalid log level <{log_level}>")
+
+        logger.log(log_levels[log_level], message)
