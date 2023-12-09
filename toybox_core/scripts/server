@@ -12,12 +12,13 @@ sys.path.append('/home/dev/toybox')
 
 from toybox_core.src.TopicServer import (
     Topic,
-    TopicServicer
+    TopicRPCServicer
 )
 from toybox_core.src.RegisterServer import (
     Client,
     RegisterServicer
 )
+from toybox_core.src.Logging import LOG
 
 from toybox_msgs.core.Register_pb2_grpc import (
     add_RegisterServicer_to_server
@@ -34,7 +35,7 @@ class ToyboxServer():
         self._clients: Dict[str,Client] = {}
 
         self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-        self._topic_servicer: TopicServicer = TopicServicer(topics=self._topics)
+        self._topic_servicer: TopicRPCServicer = TopicRPCServicer(topics=self._topics)
         self._register_servicer: RegisterServicer = RegisterServicer(clients=self._clients)
 
         self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
@@ -48,6 +49,8 @@ class ToyboxServer():
         )
 
         self._server.add_insecure_port('[::]:50051')
+        
+        LOG("INFO", f"Server configured for {self._server}")
 
     def serve(self):
         self._server.start()

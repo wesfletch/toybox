@@ -20,12 +20,11 @@ import concurrent.futures as futures
 
 # stupid hack because pip is the worst
 sys.path.append('/home/dev/toybox')
-
+from toybox_core.src.Logging import LOG
 from toybox_core.src.Node import Node
 from toybox_core.src.Connection import (
     get_available_port
 )
-
 import toybox_msgs.core.Register_pb2 as Register_pb2
 from toybox_core.src.RegisterServer import (
     register_client_rpc,
@@ -37,7 +36,6 @@ from toybox_core.src.TopicServer import (
     subscribe_topic_rpc,
     Topic,
 )
-
 import toybox_msgs.core.Client_pb2 as Client_pb2
 from toybox_msgs.core.Client_pb2_grpc import (
     ClientServicer,
@@ -47,18 +45,20 @@ from toybox_msgs.core.Topic_pb2 import (
     SubscriberList,
     TopicDefinition,
 )
-
 import toybox_msgs.core.Topic_pb2 as Topic_pb2
 
+_IS_SHUTDOWN: bool = False
 def is_shutdown() -> bool:
-    return False
+    global _IS_SHUTDOWN
+    return _IS_SHUTDOWN
 
 def deinit_node(
     name: str,
 ) -> None:
     
-    deregister_client_rpc(name=name)
-
+    LOG("DEBUG", f"De-initializing node <{name}>")
+    result: bool = deregister_client_rpc(name=name)
+    
 def init_node(
     name: str,
     address: Union[Tuple[str,int], None] = None,
@@ -72,10 +72,12 @@ def init_node(
         address = (host, port)
     else:
         host, port = address
-
+    
     node: Node = Node(name=name, 
                       host=host, 
                       port=port)
+    
+    LOG("DEBUG", f"Initialized Node <{name}> with address <{host},{port}>")
 
     # register ourselves with the master
     if not register_client_rpc(name=node._name, 

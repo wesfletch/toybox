@@ -14,7 +14,7 @@ sys.path.append('/home/dev/toybox')
 
 import toybox_msgs.core.Register_pb2 as Register_pb2
 import toybox_msgs.core.Register_pb2_grpc as Register_pb2_grpc
-
+from toybox_core.src.Logging import LOG
 # from toybox_msgs.core.Metadata_pb2 import Metadata
 
 class Message():
@@ -48,6 +48,7 @@ class RegisterServicer(Register_pb2_grpc.RegisterServicer):
 
         # we don't allow name collisions
         if self._clients.get(client_id) is not None:
+            LOG("INFO", f"Refused to register client with name <{client_id}>. Client with that ID already exists.")
             return Register_pb2.RegisterResponse(
                 return_code=1,
                 status=f"Client with ID <{client_id}> already registered.")
@@ -58,7 +59,9 @@ class RegisterServicer(Register_pb2_grpc.RegisterServicer):
             rpc_port=meta.port,
             data_port=meta.data_port if meta.data_port else -1
         )
-        # print(self._clients)
+        
+        LOG("DEBUG", f"Successfully registered client <{client_id}> at <{meta.addr}>")
+        
         return Register_pb2.RegisterResponse(return_code=0)
 
     def DeRegisterClient(
@@ -78,6 +81,7 @@ class RegisterServicer(Register_pb2_grpc.RegisterServicer):
         del self._clients[client_id]
         # print(self._clients)
         
+        LOG("DEBUG", f"Successfully de-registered client <{client_id}>.")
         return Register_pb2.RegisterResponse(return_code=0)
     
     def GetClientInfo(
@@ -151,25 +155,30 @@ def register_client_rpc(
         client_id=name,
         meta=Register_pb2.ClientMetadata(addr=host, port=port, data_port=data_port)
     )
-    result: Register_pb2.RegisterResponse = register_stub.RegisterClient(request=client_req)
-    # print(result)
-    return (result.return_code == 0)
+    result: Register_pb2.RegisterResponse
+    try:
+        result = register_stub.RegisterClient(request=client_req)
+        if result.return_code != 0:
+            LOG("ERR", f"RPC failed: {result.status}")
+        return (result.return_code == 0)
+    except grpc.RpcError as e:
+        LOG('ERR', f'Calling RegisterClient RPC failed: {e}')
+        return False
 
 def deregister_client_rpc(
     name: str,
 ) -> bool:
     
-    # check if the server is still up
-    try:
-        grpc.channel_ready_future(channel=channel).result(timeout=0)
-    except grpc.FutureTimeoutError:
-        return True
-    
     req: Register_pb2.DeRegisterRequest = Register_pb2.DeRegisterRequest(
         client_id=name
     )
-    result: Register_pb2.RegisterResponse = register_stub.DeRegisterClient(request=req)
-    # print(result)
+    result: Register_pb2.RegisterResponse 
+    try:
+        result = register_stub.DeRegisterClient(request=req)
+        LOG("DEBUG", f"De-registering client <{name}> returned <{result.return_code == 0}>.")
+    except grpc.RpcError:
+        return False
+    
     return (result.return_code == 0)
 
 def get_client_info_rpc(
