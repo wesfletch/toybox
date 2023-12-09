@@ -248,6 +248,23 @@ class Node():
             # messages that aren't explicitly handled just go into the inbound queues
             self._connections[conn].inbound.put(message.decode('utf-8'))
 
+    def advertise(
+        self,
+        topic_name: str,
+        message_type: Message
+    ) -> Union[Publisher,None]:
+        
+        pub: Publisher = self.configure_publisher(
+            topic_name=topic_name,
+            message_type=message_type,
+        )
+        if not pub.advertise(advertiser_id=self._name):
+            self.log("ERR", f"Failed to advertise topic <{topic_name}>")
+            return None
+        
+        self.log("DEBUG", f"Successfully advertised topic <{topic_name}> with message type <{message_type.DESCRIPTOR.full_name}>")
+        return pub
+
     def configure_publisher(
         self, 
         topic_name: str, 
