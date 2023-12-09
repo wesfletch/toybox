@@ -19,7 +19,7 @@ from google.protobuf.message import Message, DecodeError
 # stupid hack because pip is the worst
 sys.path.append('/home/dev/toybox')
 from toybox_core.src.TopicServer import Topic, TopicServer, advertise_topic_rpc
-from toybox_core.src.Logging import LOG
+from toybox_core.src.Logging import LOG, TbxLogger
 from toybox_msgs.core.Register_pb2 import ClientInfo, ClientMetadata
 from toybox_msgs.core.Test_pb2 import TestMessage
 
@@ -38,7 +38,8 @@ class Connection():
     inbound: "Queue[bytes]" = field(default_factory=Queue)
     outbound: "Queue[bytes]" = field(default_factory=Queue)
     lock: threading.Lock = threading.Lock()
-
+    logger: Union[TbxLogger, None] = None
+    
     # thread management
     shutdown: bool = False
 
@@ -160,6 +161,16 @@ class Connection():
         
         return message
 
+    def log(
+        self, 
+        log_level: str, 
+        message: str
+    ) -> None:
+        if self.logger is not None:
+            self.logger.LOG(log_level=log_level, message=message)
+        else:
+            LOG(log_level=log_level, message=message)
+
     def wait_for_inbound(self, blocking: bool = True) -> bool:
         """Test synchronization"""
         if blocking:
@@ -186,7 +197,8 @@ class Publisher(Connection):
         topic_name: str, 
         message_type: Message, 
         host: str, 
-        port: int
+        port: int,
+        logger: Union[TbxLogger,None] = None
     ) -> None:
     
         Connection.__init__(
@@ -195,7 +207,8 @@ class Publisher(Connection):
             sock=socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM),
             host=host,
             port=port,
-            topic=Topic(name=topic_name, message_type=message_type)
+            topic=Topic(name=topic_name, message_type=message_type),
+            logger=logger
         )
         self.sock.bind(('', self.port))
 
@@ -222,7 +235,7 @@ class Publisher(Connection):
         while not self.shutdown:
             try:
                 conn, addr = self.sock.accept()
-                LOG("DEBUG", f"<{self.name}> accepted conn request from {conn.getpeername()}")
+                self.log("DEBUG", f"<{self.name}> accepted conn request from {conn.getpeername()}")
                 with self.lock:
                     subscriber: Connection = Connection(name="", sock=conn,
                                                         host=addr[0], port=addr[1],)                
@@ -241,8 +254,8 @@ class Publisher(Connection):
     def spin(self) -> None:
 
         while not self.shutdown:
-            if len(self._subscribers) == 0:
-                continue
+            # if len(self._subscribers) == 0:
+            #     continue
 
             try:
                 message: bytes = self.outbound.get(block=False)
@@ -256,20 +269,25 @@ class Publisher(Connection):
         
         self._spin_shutdown.set()
 
-    def advertise(self) -> None:
+    def advertise(
+        self, 
+        advertiser_id: Union[str,None]
+    ) -> bool:
 
         # advertise the topic to the TopicServer
         try:
-            advertise_topic_rpc(
-                client_name=self.name,
+            result: bool = advertise_topic_rpc(
+                client_name=advertiser_id if advertiser_id else self.name,
                 client_host=self.host,
                 topic_port=self.port,
                 topic_name=self.topic.name,
                 message_type=self.topic.message_type
             )
         except grpc.RpcError as rpc_error:
-            LOG("ERR", f"that didn't work: {rpc_error}")
+            self.log("ERR", f"that didn't work: {rpc_error}")
             raise rpc_error
+        
+        return result
 
     def publish(
         self, 
@@ -278,7 +296,12 @@ class Publisher(Connection):
 
         if message.DESCRIPTOR.full_name != self.topic.message_type.DESCRIPTOR.full_name:
             raise Exception("invalid message type")
-        
+
+        # don't bother packing messages for nobody
+        # TODO: maybe latch???
+        if len(self._subscribers) == 0:
+            return
+
         packed_message: bytes = self.pack_message(message)
 
         self.outbound.put(packed_message)
@@ -294,7 +317,9 @@ class Subscriber(Connection):
         port: int,
         publisher_info: Union[None, Tuple[str,str,int]] = None,
         callback: Union[Callable[[Message], None], None] = None,
+        logger: Union[TbxLogger, None] = None
     ) -> None:
+        
         Connection.__init__(
             self,
             name=f"subscriber_{topic_name}_{str(uuid.uuid1())}",
@@ -340,6 +365,7 @@ class Subscriber(Connection):
                 message_data=message_bytes
             )
             
+            # TODO: could get more robust with callbacks
             for callback in self.callbacks:
                 callback(message_obj)
 

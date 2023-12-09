@@ -86,7 +86,7 @@ class TopicRPCServicer(TopicServicer):
             self._topics[topic_name] = Topic(name=topic_name,
                                             message_type=message_type,
                                             publishers={advertiser_id: (advertiser_host, advertiser_port)})
-            conf.status = f"Topic <{topic_name}> advertised successfully."
+            conf.status = f"Topic <{topic_name}> from client <{advertiser_id}> advertised successfully."
         
         LOG("DEBUG", conf.status)
         return conf

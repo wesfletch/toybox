@@ -43,7 +43,7 @@ from toybox_msgs.core.Client_pb2_grpc import (
 
 import toybox_msgs.core.Topic_pb2 as Topic_pb2
 
-from toybox_core.src.Logging import LOG
+from toybox_core.src.Logging import TbxLogger
 
 class Node():
 
@@ -58,6 +58,8 @@ class Node():
         self._name = name
         self._host: str = host
         self._port: int = port
+
+        self._logger: TbxLogger = TbxLogger(self._name)
 
         # thread management
         self._shutdown: bool = False
@@ -132,7 +134,7 @@ class Node():
         while not self._shutdown:
             try:
                 conn, addr = self._msg_socket.accept()
-                LOG("DEBUG", f"<{self._name}> accepted conn request from {conn.getpeername()}")
+                self.log("DEBUG", f"<{self._name}> accepted conn request from {conn.getpeername()}")
                 with self._conn_lock:                
                     self._connections[conn] = Connection(
                         name="",
@@ -188,7 +190,7 @@ class Node():
                 except Empty:
                     continue
 
-                LOG("DEBUG", f"<{self._name}> sent message to {self._connections[conn].name}: {message}")
+                self.log("DEBUG", f"<{self._name}> sent message to {self._connections[conn].name}: {message}")
                 self._connections[conn].sock.sendall(message)
 
             # TODO: need this to avoid all sorts of weird messaging order issues,
@@ -210,7 +212,7 @@ class Node():
 
         message_type, message_data = Connection.split_message(message)
 
-        LOG("DEBUG",f'<{self._name}> received: \n\tmessage_type=<{message_type}>\n\tmessage={message_data!r}')
+        self.log("DEBUG",f'<{self._name}> received: \n\tmessage_type=<{message_type}>\n\tmessage={message_data!r}')
 
         # TODO: these should really be broken out into callbacks
         if message_type == "core.ClientInfo":
@@ -219,15 +221,15 @@ class Node():
             try:
                 client_info.ParseFromString(message_data)
             except DecodeError as e:
-                LOG("ERR", f"We just got garbage: {e}")
+                self.log("ERR", f"We just got garbage: {e}")
                 return
             
             if not self._connections[conn].initialized:
-                LOG("DEBUG", f"{self._name} initializing connection with {client_info.client_id}")
+                self.log("DEBUG", f"{self._name} initializing connection with {client_info.client_id}")
                 self._connections[conn].name = client_info.client_id
                 self._connections[conn].initialized = True
             else:
-                LOG("DEBUG", "already initialized")
+                self.log("DEBUG", "already initialized")
                 return
             
         elif message_type == "core.Confirmation":
@@ -236,13 +238,13 @@ class Node():
             try:
                 confirmation.ParseFromString(message_data)
             except DecodeError as e:
-                LOG("ERR", f"We just got garbage: {e}")
+                self.log("ERR", f"We just got garbage: {e}")
                 return
             
-            LOG("DEBUG", f"{self._name}: {confirmation}")
+            self.log("DEBUG", f"{self._name}: {confirmation}")
 
         else:
-            LOG("DEBUG", f"got unhandled message type: <{message_type}>")
+            self.log("DEBUG", f"got unhandled message type: <{message_type}>")
             # messages that aren't explicitly handled just go into the inbound queues
             self._connections[conn].inbound.put(message.decode('utf-8'))
 
@@ -258,6 +260,7 @@ class Node():
             message_type=message_type,
             host=self._host,
             port=get_available_port(host=self._host, start=self._msg_port),
+            logger=self._logger
         )
 
         self.publishers.append(publisher)
@@ -277,7 +280,8 @@ class Node():
             host=self._host,
             port=get_available_port(host=self._host, start=self._msg_port),
             publisher_info=publisher_info,
-            callback=callback
+            callback=callback,
+            logger=self._logger
         )
 
         self.subscribers.append(subscriber)
@@ -291,17 +295,17 @@ class Node():
     ) -> bool:
     
         # request information about publishers of a specific topic
-        LOG("DEBUG", f"{self._name} requesting topic information")
+        self.log("DEBUG", f"{self._name} requesting topic information")
         try:
             publishers: List[Tuple[str, int]] = subscribe_topic_rpc(
                 topic_name=topic_name,
                 message_type=message_type)
         except grpc.RpcError as rpc_error:
-            LOG("ERR", f"that didn't work: {rpc_error}")
+            self.log("ERR", f"that didn't work: {rpc_error}")
             return False
         
         if len(publishers) == 0:
-            LOG("DEBUG", f"no publishers declared for topic <{topic_name}>")
+            self.log("DEBUG", f"no publishers declared for topic <{topic_name}>")
             self.configure_subscriber(
                 topic_name=topic_name,
                 message_type=message_type,
@@ -318,7 +322,14 @@ class Node():
                 )
 
         return True
-        
+    
+    def log(
+        self,
+        log_level: str,
+        message: str
+    ) -> None:
+        self._logger.LOG(log_level=log_level, message=message)
+
     @property
     def connections(self) -> Dict[socket.socket,Connection]:
         with self._conn_lock:
