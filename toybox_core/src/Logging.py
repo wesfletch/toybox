@@ -28,7 +28,16 @@ def LOG(
     log_level: str,
     message: str
 ) -> None:
-    
+    """
+    Log `message` with level `log_level`
+
+    Args:
+        log_level (str): DEBUG|INFO|WARN|ERR|FATAL
+        message (str): message to be logged
+
+    Raises:
+        Exception: Invalid log level provided.
+    """
     if log_level not in log_levels.keys():
         raise Exception(f"Invalid log level <{log_level}>")
 
@@ -47,7 +56,7 @@ class TbxLogger():
 
     def __init__(self, name: str) -> None:
 
-        self.logger: logging.Logger = logging.getLogger("tbx")
+        self.logger: logging.Logger = logging.getLogger(name)
         self.logger.setLevel(logging.DEBUG)
 
         ch: logging.StreamHandler = logging.StreamHandler(stream=sys.stdout)
@@ -67,4 +76,4 @@ class TbxLogger():
         if log_level not in self.log_levels.keys():
             raise Exception(f"Invalid log level <{log_level}>")
 
-        logger.log(log_levels[log_level], message)
+        self.logger.log(log_levels[log_level], message)
