@@ -3,24 +3,20 @@
 import grpc
 from typing import Dict, List, Union, Tuple, Callable
 
-from toybox_core.src.TopicServer import (
+from toybox_core.TopicServer import (
     Topic,
 )
-from toybox_core.src.Connection import (
+from toybox_core.Connection import (
     Subscriber
 )
 
 import toybox_msgs.core.Client_pb2 as Client_pb2
 from toybox_msgs.core.Client_pb2_grpc import (
     ClientServicer,
-    add_ClientServicer_to_server,
 )
 from toybox_msgs.core.Topic_pb2 import (
-    SubscriberList,
     TopicDefinition,
 )
-
-import toybox_msgs.core.Topic_pb2 as Topic_pb2
 
 class ClientRPCServicer(ClientServicer):
 

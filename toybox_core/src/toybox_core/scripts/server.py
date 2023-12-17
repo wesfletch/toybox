@@ -1,24 +1,19 @@
 #!/usr/bin/env python3
 
-import os
-import sys
 from typing import Dict, List, Tuple, Union, Callable
 
 import grpc
 import concurrent.futures as futures
 
-# stupid hack because pip is the worst
-sys.path.append('/home/dev/toybox')
-
-from toybox_core.src.TopicServer import (
+from toybox_core.TopicServer import (
     Topic,
     TopicRPCServicer
 )
-from toybox_core.src.RegisterServer import (
+from toybox_core.RegisterServer import (
     Client,
     RegisterServicer
 )
-from toybox_core.src.Logging import LOG
+from toybox_core.Logging import LOG
 
 from toybox_msgs.core.Register_pb2_grpc import (
     add_RegisterServicer_to_server
@@ -27,6 +22,8 @@ from toybox_msgs.core.Topic_pb2_grpc import (
     add_TopicServicer_to_server
 )
 
+# TODO: transition to "monolithic" server
+#       need central store of info for Topics + Clients at least
 class ToyboxServer():
 
     def __init__(self):
@@ -59,7 +56,7 @@ class ToyboxServer():
 
 def main():
 
-    tbx = ToyboxServer()
+    tbx: ToyboxServer = ToyboxServer()
     tbx.serve()
 
 
