@@ -9,13 +9,9 @@ import grpc
 import concurrent.futures as futures
 import threading
 
-# stupid hack because pip is the worst
-sys.path.append('/home/dev/toybox')
-
+from toybox_core.Logging import LOG
 import toybox_msgs.core.Register_pb2 as Register_pb2
 import toybox_msgs.core.Register_pb2_grpc as Register_pb2_grpc
-from toybox_core.src.Logging import LOG
-# from toybox_msgs.core.Metadata_pb2 import Metadata
 
 class Message():
     """"

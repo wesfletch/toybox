@@ -11,9 +11,6 @@ import concurrent.futures as futures
 import grpc
 from google.protobuf.message import Message
 
-# stupid hack because pip is the worst
-sys.path.append('/home/dev/toybox')
-
 from toybox_msgs.core.Topic_pb2 import (
     AdvertiseRequest,
     TopicDefinition,
@@ -27,8 +24,8 @@ from toybox_msgs.core.Topic_pb2_grpc import (
     TopicStub,
     add_TopicServicer_to_server
 )
-from toybox_core.src.RegisterServer import Client
-from toybox_core.src.Logging import LOG
+from toybox_core.RegisterServer import Client
+from toybox_core.Logging import LOG
 
 
 @dataclass

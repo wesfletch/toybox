@@ -7,12 +7,10 @@ import errno
 from queue import Queue, Empty
 import select
 import socket
-import struct
 import sys
 import threading
 import time
 from typing import Dict, List, Union, Tuple, Callable
-import uuid
 
 import grpc
 from google.protobuf.message import Message, DecodeError
@@ -21,7 +19,7 @@ import concurrent.futures as futures
 # stupid hack because pip is the worst
 sys.path.append('/home/dev/toybox')
 
-from toybox_core.src.Connection import (
+from toybox_core.Connection import (
     Connection,
     Subscriber,
     Publisher,
@@ -29,12 +27,12 @@ from toybox_core.src.Connection import (
 )
 
 import toybox_msgs.core.Register_pb2 as Register_pb2
-from toybox_core.src.TopicServer import (
+from toybox_core.TopicServer import (
     subscribe_topic_rpc,
     Topic,
 )
 
-from toybox_core.src.ClientServer import (
+from toybox_core.ClientServer import (
     ClientRPCServicer
 )
 from toybox_msgs.core.Client_pb2_grpc import (
@@ -43,7 +41,7 @@ from toybox_msgs.core.Client_pb2_grpc import (
 
 import toybox_msgs.core.Topic_pb2 as Topic_pb2
 
-from toybox_core.src.Logging import TbxLogger
+from toybox_core.Logging import TbxLogger
 
 class Node():
 
@@ -143,7 +141,7 @@ class Node():
                         port=addr[1],
                     )
             except BlockingIOError:
-                continue
+                time.sleep(0.01)
 
         self._msg_socket.shutdown(socket.SHUT_RDWR)
         self._msg_socket.close()
@@ -160,6 +158,10 @@ class Node():
         
         # service ephemeral connections
         while not self._shutdown:
+            
+            # TODO: need this to avoid all sorts of weird messaging order issues,
+            #       should probably figure out why
+            time.sleep(0.01)
             
             # acquire the "connection" mutex to ensure we don't read the list while it's changing
             if not self._conn_lock.acquire(blocking=False):
@@ -193,9 +195,6 @@ class Node():
                 self.log("DEBUG", f"<{self._name}> sent message to {self._connections[conn].name}: {message}")
                 self._connections[conn].sock.sendall(message)
 
-            # TODO: need this to avoid all sorts of weird messaging order issues,
-            #       should probably figure out why
-            time.sleep(0.01)
 
     def handle_message(
         self, 

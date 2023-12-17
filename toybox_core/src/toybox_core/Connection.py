@@ -16,10 +16,8 @@ import uuid
 import grpc
 from google.protobuf.message import Message, DecodeError
 
-# stupid hack because pip is the worst
-sys.path.append('/home/dev/toybox')
-from toybox_core.src.TopicServer import Topic, TopicServer, advertise_topic_rpc
-from toybox_core.src.Logging import LOG, TbxLogger
+from toybox_core.TopicServer import Topic, TopicServer, advertise_topic_rpc
+from toybox_core.Logging import LOG, TbxLogger
 from toybox_msgs.core.Register_pb2 import ClientInfo, ClientMetadata
 from toybox_msgs.core.Test_pb2 import TestMessage
 
@@ -241,9 +239,7 @@ class Publisher(Connection):
                                                         host=addr[0], port=addr[1],)                
                     self._subscribers.append(subscriber)
             except BlockingIOError:
-                continue
-
-            time.sleep(0.001)
+                time.sleep(0.1)
 
         self.sock.shutdown(socket.SHUT_RDWR)
         self.sock.close()
@@ -254,8 +250,7 @@ class Publisher(Connection):
     def spin(self) -> None:
 
         while not self.shutdown:
-            # if len(self._subscribers) == 0:
-            #     continue
+            time.sleep(0.01)
 
             try:
                 message: bytes = self.outbound.get(block=False)
@@ -265,7 +260,6 @@ class Publisher(Connection):
             for subscriber in self._subscribers:
                 subscriber.sock.sendall(message)
 
-            time.sleep(0.001)
         
         self._spin_shutdown.set()
 
@@ -345,6 +339,8 @@ class Subscriber(Connection):
     def spin(self) -> None:
 
         while not self.shutdown:
+            time.sleep(0.001)
+            
             if self._publisher is None:
                 continue
             
@@ -369,7 +365,6 @@ class Subscriber(Connection):
             for callback in self.callbacks:
                 callback(message_obj)
 
-            time.sleep(0.001)
 
     def connect_to_publisher(
         self, 

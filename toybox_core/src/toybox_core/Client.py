@@ -18,20 +18,18 @@ import grpc
 from google.protobuf.message import Message, DecodeError
 import concurrent.futures as futures
 
-# stupid hack because pip is the worst
-sys.path.append('/home/dev/toybox')
-from toybox_core.src.Logging import LOG
-from toybox_core.src.Node import Node
-from toybox_core.src.Connection import (
+from toybox_core.Logging import LOG
+from toybox_core.Node import Node
+from toybox_core.Connection import (
     get_available_port
 )
 import toybox_msgs.core.Register_pb2 as Register_pb2
-from toybox_core.src.RegisterServer import (
+from toybox_core.RegisterServer import (
     register_client_rpc,
     deregister_client_rpc,
     get_client_info_rpc,
 )
-from toybox_core.src.TopicServer import (
+from toybox_core.TopicServer import (
     advertise_topic_rpc,
     subscribe_topic_rpc,
     Topic,
@@ -54,9 +52,12 @@ def is_shutdown() -> bool:
 
 def deinit_node(
     name: str,
+    node: Union[Node,None]
 ) -> None:
     
     LOG("DEBUG", f"De-initializing node <{name}>")
+    # TODO: de-register all topics
+    print(node)
     result: bool = deregister_client_rpc(name=name)
     
 def init_node(
@@ -64,27 +65,31 @@ def init_node(
     address: Union[Tuple[str,int], None] = None,
 ) -> Node:
     
-    atexit.register(deinit_node, name)
-
     if not address:
         host: str = "localhost"
         port: int = get_available_port(host="localhost")
-        address = (host, port)
     else:
         host, port = address
     
-    node: Node = Node(name=name, 
-                      host=host, 
-                      port=port)
+    node: Node = Node(
+        name=name, 
+        host=host, 
+        port=port
+    )
     
     LOG("DEBUG", f"Initialized Node <{name}> with address <{host},{port}>")
 
     # register ourselves with the master
-    if not register_client_rpc(name=node._name, 
-                               host=node._host,
-                               port=node._port,
-                               data_port=node._msg_port):
-        print("we fucked up, I guess")
+    result: bool = register_client_rpc(
+        name=node._name, 
+        host=node._host,
+        port=node._port,
+        data_port=node._msg_port
+    )
+    if not result:
+        LOG("ERR", f"Failed to register node with server.")
+    else:
+        atexit.register(deinit_node, name, node)
 
     return node
 
