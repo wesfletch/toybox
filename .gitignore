@@ -5,6 +5,4 @@
 **/resources/*
 .toyboxrc
 
-*pb2*.py*
-
 env/*
