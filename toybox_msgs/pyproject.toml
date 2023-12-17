@@ -1,23 +1,35 @@
-[build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "toybox_msgs"
+description = "Simple (toy) robotics stack messages"
 version = "0.0.1"
 authors = [
     {name="Wes Fletcher", email="please@donot.com"},
 ]
-description = "Simple (toy) robotics stack messages"
 readme = "README.md"
+
 requires-python = ">=3.8"
-classifiers = []
+dependencies = [
+    "protobuf",
+    "grpcio", # gRPC
+    "grpcio-tools",
+]
 
-[project-urls]
-"Homepage" = "https://github.com/wesfletch/toybox"
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tools.setuptools]
-packages=["toybox_msgs",
-          "toybox_msgs.primitive",
-          "toybox_msgs.state",
-          "toybox_msgs.core"]
+[tool.hatch.build.targets.wheel]
+packages = [
+    "src/core", 
+    "src/primitives", 
+    "src/state"
+]
+
+[tool.hatch.build.targets.sdist]
+ignore-vcs = true
+include = [
+    "src/*"
+]
+exclude = [
+    "/build_messages"
+]
