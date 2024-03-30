@@ -15,8 +15,6 @@ from toybox_msgs.core.Topic_pb2 import (
     AdvertiseRequest,
     TopicDefinition,
     Confirmation,
-    SubscribeResponse,
-    PublisherInfo,
     SubscriptionResponse
 )
 from toybox_msgs.core.Topic_pb2_grpc import (
@@ -26,23 +24,18 @@ from toybox_msgs.core.Topic_pb2_grpc import (
 )
 from toybox_core.RegisterServer import Client
 from toybox_core.Logging import LOG
+from toybox_core.Topic import Topic
 
-
-@dataclass
-class Topic():
-    name: str
-    message_type: Message 
-    publishers: Dict[str, Tuple[str,int]] = field(default_factory=dict) # {client, port}
-    subscribers: List[str] = field(default_factory=list)
-
-    callbacks: List[Callable] = field(default_factory=list)
-
-    confirmed: bool = False
 
 class TopicRPCServicer(TopicServicer):
 
-    def __init__(self, topics: Dict[str, Topic]):
+    def __init__(
+        self, 
+        topics: Dict[str, Topic],
+        clients: Dict[str, Client],
+    ) -> None:
         self._topics = topics
+        self._clients = clients
 
     def AdvertiseTopic(
         self, 
@@ -67,7 +60,8 @@ class TopicRPCServicer(TopicServicer):
         # check if this topic already exists
         topic: Union[Topic,None] = self._topics.get(topic_name, None)
         if topic is not None:
-            # don't allow re-declaring topics
+            # TODO: I think I'd rather not allow two topics to share a name at all. But we'll see...
+            # don't allow a publisher to re-declare a topic
             if advertiser_id in topic.publishers.keys():
                 conf.return_code = 1
                 conf.status = f"multiple advertise for topic <{topic_name}> by publisher <{advertiser_id}>"
@@ -85,7 +79,6 @@ class TopicRPCServicer(TopicServicer):
                                             publishers={advertiser_id: (advertiser_host, advertiser_port)})
             conf.status = f"Topic <{topic_name}> from client <{advertiser_id}> advertised successfully."
         
-        LOG("DEBUG", conf.status)
         return conf
     
     def DeAdvertiseTopic(self, request, context) -> Confirmation:
@@ -191,6 +184,9 @@ def subscribe_topic_rpc(
     message_type: str,
 ) -> List[Tuple[str,str,int]]:
     
+    print(f"topic_name: {type(topic_name)}")
+    print(f"message_type: {type(message_type)}")
+
     subscribe_req: TopicDefinition = TopicDefinition(
         uuid=str(uuid.uuid4()),
         topic_name=topic_name,
@@ -203,56 +199,3 @@ def subscribe_topic_rpc(
         returned.append((publisher.publisher_id, publisher.publisher_host, publisher.topic_port))
 
     return returned
-
-def main() -> None:
-
-    server: TopicServer = TopicServer()
-    server_thread: threading.Thread = threading.Thread(target=server.serve)
-    server_thread.start()
-
-    # wait for server to be ready before continuing
-    while server.not_started:
-        continue
-
-    advertise_req: AdvertiseRequest = AdvertiseRequest(
-        client_id="client_1",
-        host="\'\'",
-        topic_port=1001,
-        topic_def=TopicDefinition(
-            uuid="1",
-            topic_name="butts",
-            message_type="butts"
-        )
-    )
-    conf: Confirmation = stub.AdvertiseTopic(request=advertise_req)
-    print(conf)
-
-    advertise_req: AdvertiseRequest = AdvertiseRequest(
-        client_id="client_2",
-        host="\'\'",
-        topic_port=1002,
-        topic_def=TopicDefinition(
-            uuid="1",
-            topic_name="butts",
-            message_type="butts"
-        )
-    )
-    conf: Confirmation = stub.AdvertiseTopic(request=advertise_req)
-    print(conf)
-
-    subscribe_req: TopicDefinition = TopicDefinition(
-        uuid="test_sub",
-        topic_name="butts",
-        message_type="butts",
-    )
-    sub_conf: SubscriptionResponse = stub.SubscribeTopic(request=subscribe_req)
-    print(sub_conf)
-
-    publishers: List[Tuple[str, int]] = subscribe_topic_rpc(topic_name="butts",
-                                                           message_type="butts")
-    print(publishers)
-    # server_thread.shutdown()
-    server_thread.join()
-
-if __name__ == "__main__":
-    main()
