@@ -10,14 +10,9 @@ import concurrent.futures as futures
 import threading
 
 from toybox_core.Logging import LOG
+from toybox_core.Topic import Topic
 import toybox_msgs.core.Register_pb2 as Register_pb2
 import toybox_msgs.core.Register_pb2_grpc as Register_pb2_grpc
-
-class Message():
-    """"
-    wraps a protobuf class
-    """
-    pass
 
 @dataclass
 class Client():
@@ -28,8 +23,13 @@ class Client():
 
 class RegisterServicer(Register_pb2_grpc.RegisterServicer):
 
-    def __init__(self, clients: Dict[str,Client]):
-        self._clients = clients
+    def __init__(
+        self, 
+        clients: Dict[str,Client],
+        topics: Dict[str,Topic],
+    ) -> None:
+        self._clients: Dict[str,Client] = clients
+        self._topics: Dict[str, Topic] = topics
 
     def RegisterClient(
         self, 
@@ -74,9 +74,14 @@ class RegisterServicer(Register_pb2_grpc.RegisterServicer):
                 status=f'No client with ID <{client_id}> registered.'
             )
         
-        del self._clients[client_id]
-        # print(self._clients)
+        # when a client de-registers, we also want to de-register all of
+        # it's advertised topics
+        for topic in self._topics.values():
+            if topic.publishers.get(client_id, None) is not None:
+                del topic.publishers[client_id]
         
+        del self._clients[client_id]
+
         LOG("DEBUG", f"Successfully de-registered client <{client_id}>.")
         return Register_pb2.RegisterResponse(return_code=0)
     

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import atexit
 from typing import Dict, List, Tuple, Union, Callable
 
 import grpc
@@ -14,6 +15,7 @@ from toybox_core.RegisterServer import (
     RegisterServicer
 )
 from toybox_core.Logging import LOG
+import toybox_core as tbx
 
 from toybox_msgs.core.Register_pb2_grpc import (
     add_RegisterServicer_to_server
@@ -22,18 +24,24 @@ from toybox_msgs.core.Topic_pb2_grpc import (
     add_TopicServicer_to_server
 )
 
-# TODO: transition to "monolithic" server
-#       need central store of info for Topics + Clients at least
+
 class ToyboxServer():
 
     def __init__(self):
         
-        self._topics: Dict[str, Topic] = {}
+        atexit.register(self.shutdown)
+
+        self._topics: Dict[str,Topic] = {}
         self._clients: Dict[str,Client] = {}
 
-        self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-        self._topic_servicer: TopicRPCServicer = TopicRPCServicer(topics=self._topics)
-        self._register_servicer: RegisterServicer = RegisterServicer(clients=self._clients)
+        self._topic_servicer: TopicRPCServicer = TopicRPCServicer(
+            topics=self._topics,
+            clients=self._clients
+        )
+        self._register_servicer: RegisterServicer = RegisterServicer(
+            clients=self._clients,
+            topics=self._topics
+        )
 
         self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
         add_TopicServicer_to_server(
@@ -53,6 +61,9 @@ class ToyboxServer():
         self._server.start()
         self._server.wait_for_termination()
 
+    def shutdown(self):
+        tbx.signal_shutdown()
+        print(tbx.is_shutdown())
 
 def main():
 

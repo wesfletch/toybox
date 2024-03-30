@@ -49,15 +49,19 @@ class Node():
         self,
         name: str,
         host: str = "localhost",
-        port: int = 50505,
+        port: Union[int, None] = None,
+        log_level: Union[str,None] = None,
         # sock: Union[socket.socket,None] = None,
     ) -> None:
 
         self._name = name
         self._host: str = host
-        self._port: int = port
+        self._port: int = port if port else get_available_port()
 
+        # configure logger
         self._logger: TbxLogger = TbxLogger(self._name)
+        if log_level:
+            self.set_log_level(log_level=log_level)
 
         # thread management
         self._shutdown: bool = False
@@ -80,11 +84,11 @@ class Node():
         self._msg_socket.bind((self._host, self._msg_port))
 
         # listen for incoming connections in separate thread
-        self.listen_thread: threading.Thread = threading.Thread(target=self.listen)
+        self.listen_thread: threading.Thread = threading.Thread(target=self._listen)
         self.listen_thread.start()
 
         # run our spin function as a separate thread
-        self.spin_thread: threading.Thread = threading.Thread(target=self.spin)
+        self.spin_thread: threading.Thread = threading.Thread(target=self._spin)
         self.spin_thread.start()
 
         self._threads: List[threading.Thread] = []
@@ -92,15 +96,18 @@ class Node():
         self._executor: futures.ThreadPoolExecutor = futures.ThreadPoolExecutor(
             max_workers=10
         )
-        self.configure_rpc_servicer()
+        self._configure_rpc_servicer()
 
-        atexit.register(self.cleanup)
+        atexit.register(self.shutdown)
 
-    def cleanup(self) -> None:
+    def shutdown(self) -> None:
         self._shutdown = True
         # deregister_client_rpc(self._name)
 
-    def configure_rpc_servicer(self) -> None:
+    def is_shutdown(self) -> bool:
+        return self._shutdown
+
+    def _configure_rpc_servicer(self) -> None:
 
         self._rpc_server = grpc.server(
             thread_pool=self._executor,
@@ -117,7 +124,7 @@ class Node():
         # non-blocking
         self._rpc_server.start()
 
-    def listen(self) -> None:
+    def _listen(self) -> None:
         """
         Listen for "ephemeral" connections to this Node from other Nodes.
         Ephemeral connections either go away quickly, or are transitioned to Subs/Pubs.
@@ -146,7 +153,7 @@ class Node():
         self._msg_socket.shutdown(socket.SHUT_RDWR)
         self._msg_socket.close()
 
-    def spin(
+    def _spin(
         self
     ) -> None:
         """
@@ -176,7 +183,7 @@ class Node():
 
             for conn in ready_to_read:
                 message: bytes = self._connections[conn].read(conn=conn)
-                self.handle_message(conn=conn, message=message)
+                self._handle_message(conn=conn, message=message)
 
             for conn in ready_to_write:
                 connection: Union[Connection,None] = self.connections.get(conn, None)
@@ -196,7 +203,7 @@ class Node():
                 self._connections[conn].sock.sendall(message)
 
 
-    def handle_message(
+    def _handle_message(
         self, 
         conn: socket.socket, 
         message: bytes,
@@ -253,7 +260,7 @@ class Node():
         message_type: Message
     ) -> Union[Publisher,None]:
         
-        pub: Publisher = self.configure_publisher(
+        pub: Publisher = self._configure_publisher(
             topic_name=topic_name,
             message_type=message_type,
         )
@@ -264,7 +271,7 @@ class Node():
         self.log("DEBUG", f"Successfully advertised topic <{topic_name}> with message type <{message_type.DESCRIPTOR.full_name}>")
         return pub
 
-    def configure_publisher(
+    def _configure_publisher(
         self, 
         topic_name: str, 
         message_type: str
@@ -282,10 +289,10 @@ class Node():
         self.publishers.append(publisher)
         return publisher
 
-    def configure_subscriber(
+    def _configure_subscriber(
         self, 
         topic_name: str, 
-        message_type: str, 
+        message_type: Message, 
         publisher_info: Tuple[str,str,int],
         callback: Union[Callable, None] = None,
     ) -> Subscriber:
@@ -306,7 +313,7 @@ class Node():
     def subscribe(
         self,
         topic_name: str,
-        message_type: str,
+        message_type: Message,
         callback_fn: Union[Callable,None] = None
     ) -> bool:
     
@@ -315,14 +322,14 @@ class Node():
         try:
             publishers: List[Tuple[str, int]] = subscribe_topic_rpc(
                 topic_name=topic_name,
-                message_type=message_type)
+                message_type=message_type.DESCRIPTOR.full_name)
         except grpc.RpcError as rpc_error:
             self.log("ERR", f"that didn't work: {rpc_error}")
             return False
         
         if len(publishers) == 0:
             self.log("DEBUG", f"no publishers declared for topic <{topic_name}>")
-            self.configure_subscriber(
+            self._configure_subscriber(
                 topic_name=topic_name,
                 message_type=message_type,
                 publisher_info=None,
@@ -330,7 +337,7 @@ class Node():
             )
         else:
             for publisher in publishers:
-                self.configure_subscriber(
+                self._configure_subscriber(
                     topic_name=topic_name,
                     message_type=message_type,
                     publisher_info=publisher,
@@ -345,6 +352,16 @@ class Node():
         message: str
     ) -> None:
         self._logger.LOG(log_level=log_level, message=message)
+
+    def set_log_level(
+        self,
+        log_level: str
+    ) -> None:
+        
+        self._logger.set_log_level(log_level=log_level)
+
+    def __str__(self) -> str:
+        return self._name
 
     @property
     def connections(self) -> Dict[socket.socket,Connection]:

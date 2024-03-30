@@ -45,10 +45,22 @@ from toybox_msgs.core.Topic_pb2 import (
 )
 import toybox_msgs.core.Topic_pb2 as Topic_pb2
 
+# This shutdown approach won't work. Python processes
+# run with their own memory, so setting this value
+# only sets it for that single process.
 _IS_SHUTDOWN: bool = False
+_SHUTDOWN_LOCK: threading.Lock = threading.Lock()
+
 def is_shutdown() -> bool:
     global _IS_SHUTDOWN
-    return _IS_SHUTDOWN
+    global _SHUTDOWN_LOCK
+    with _SHUTDOWN_LOCK:
+        return _IS_SHUTDOWN
+
+def signal_shutdown() -> None:
+    global _IS_SHUTDOWN
+    with _SHUTDOWN_LOCK:
+        _IS_SHUTDOWN = True
 
 def deinit_node(
     name: str,
@@ -56,13 +68,12 @@ def deinit_node(
 ) -> None:
     
     LOG("DEBUG", f"De-initializing node <{name}>")
-    # TODO: de-register all topics
-    print(node)
     result: bool = deregister_client_rpc(name=name)
     
 def init_node(
     name: str,
     address: Union[Tuple[str,int], None] = None,
+    log_level: Union[str,None] = None,
 ) -> Node:
     
     if not address:
@@ -74,7 +85,8 @@ def init_node(
     node: Node = Node(
         name=name, 
         host=host, 
-        port=port
+        port=port,
+        log_level=log_level,
     )
     
     LOG("DEBUG", f"Initialized Node <{name}> with address <{host},{port}>")
@@ -119,29 +131,3 @@ def subscribe_topic(
     
     for publisher in publishers:
         pass
-
-def main():
-
-    node = init_node(name="quetzal")
-
-    # result = advertise_topic(
-    #     client_name="quetzal",
-    #     topic_name="fucker",
-    #     message_type="also_fucker"
-    # )
-    # print(result)
-    
-    # result = subscribe_topic(
-    #     client_name="quetzal",
-    #     topic_name="buttest",
-    #     message_type="butter"
-    # )
-    # print(result)
-
-    # get_client_info_rpc(client_name="quetzal")
-
-    # while True:
-    #     pass
-
-if __name__ == "__main__":
-    main()
