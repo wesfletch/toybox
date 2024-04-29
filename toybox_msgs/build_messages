@@ -5,15 +5,17 @@
 
 SCRIPT="$(realpath "$0")"
 BASEDIR="$(dirname "${SCRIPT}")"
-echo "${BASEDIR}"
 
-for directory in */; do
+pushd "./src/toybox_msgs" >>/dev/null|| exit
+
+for directory in */; do # loop through all subdirs
 
     IN_DIR="${BASEDIR}/${directory}/proto"
     OUT_DIR="${BASEDIR}/${directory}"
 
     # if a directory has it's own build_messages exec, just do that
     if [[ -x "${directory}/build_messages" ]]; then
+        echo "Executing sub-dir build_messages: ${directory}"
         "${directory}/build_messages"
     else
         [[ "${directory}" == "build" ]] && continue
@@ -23,7 +25,7 @@ for directory in */; do
             mkdir -p "${OUT_DIR}"
         fi
         
-        cp initpy.txt "${OUT_DIR}/__init__.py"
+        # cp initpy.txt "${OUT_DIR}/__init__.py"
 
         echo "Building messages in ${IN_DIR}"
         # protoc -I="${IN_DIR}" \
@@ -36,3 +38,5 @@ for directory in */; do
     fi
 
 done
+
+popd >>/dev/null || exit
