@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+USERNAME="ubuntu"
+
+docker run \
+    -it \
+    --rm \
+    --user "${USERNAME}" \
+    -v "${PWD}:/home/${USERNAME}/toybox" \
+    --workdir "/home/${USERNAME}/toybox" \
+    devimage:latest
