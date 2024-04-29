@@ -11,26 +11,25 @@ import struct
 import sys
 import threading
 
-sys.path.append('/home/dev/toybox')
 import toybox_msgs.core.Client_pb2 as Client_pb2
 from toybox_msgs.core.Client_pb2_grpc import (
     # ClientRPCServicer,
     ClientStub,
     add_ClientServicer_to_server,
 )
-from toybox_core.src.ClientServer import (
+from toybox_core.ClientServer import (
     ClientRPCServicer,
 )
 
-from toybox_core.src.Connection import (
+from toybox_core.Connection import (
     Connection,
 )
 
-from toybox_core.src.Node import (
+from toybox_core.Node import (
     Node,
     get_available_port
 )
-from toybox_core.src.Client import (
+from toybox_core.Client import (
     init_node,
 )
 
@@ -40,7 +39,7 @@ from toybox_msgs.core.Topic_pb2_grpc import (
 from toybox_msgs.core.Topic_pb2 import (
     TopicDefinition,
 )
-from toybox_core.src.TopicServer import (
+from toybox_core.TopicServer import (
     Topic,
     TopicServicer
 )
@@ -49,7 +48,7 @@ import toybox_msgs.core.Register_pb2 as Register_pb2
 from toybox_msgs.core.Register_pb2_grpc import (
     add_RegisterServicer_to_server
 )
-from toybox_core.src.RegisterServer import (
+from toybox_core.RegisterServer import (
     Client,
     RegisterServicer,
     RegisterServer
