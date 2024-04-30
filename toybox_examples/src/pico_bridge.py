@@ -2,7 +2,7 @@
 
 import threading
 import time
-from typing import Union, List
+from typing import Union, List, Optional
 
 from toybox_core.Connection import Subscriber
 
@@ -28,7 +28,7 @@ class PicoBridge(Launchable):
             log_level="INFO"
         )
 
-        self._publisher: Union[None,Publisher] = self._node.advertise(
+        self._publisher: Optional[Publisher] = self._node.advertise(
             topic_name="/test",
             message_type=TestMessage
         )

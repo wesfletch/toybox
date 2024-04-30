@@ -73,8 +73,8 @@ class TbxLogger():
         message: str
     ) -> None:
     
-        if log_level not in self.log_levels.keys():
-            raise Exception(f"Invalid log level <{log_level}>")
+        if log_level not in log_levels.keys():
+            raise KeyError(f"Un-supported log level <{log_level}> provided. Supported levels are {self.log_levels.keys()}")
 
         self.logger.log(log_levels[log_level], message)
 

@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 
-SCRIPT_DIR="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 || exit ; pwd -P )"
+set -o errexit
+set -o pipefail
+set -o nounset
+# set -o xtrace
+
+SCRIPT_DIR="$(cd -- "$(dirname "$0")" >/dev/null 2>&1 || exit ; pwd -P)"
 
 TOYBOX_DIR="${1:-"${SCRIPT_DIR}"}"
 

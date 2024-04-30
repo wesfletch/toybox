@@ -1,11 +1,31 @@
 #!/usr/bin/env bash
 
-USERNAME="ubuntu"
+set -o errexit
+set -o pipefail
+set -o nounset
+# set -o xtrace
 
-docker run \
-    -it \
-    --rm \
-    --user "${USERNAME}" \
-    -v "${PWD}:/home/${USERNAME}/toybox" \
-    --workdir "/home/${USERNAME}/toybox" \
-    devimage:latest
+COMMAND="${1:-"run"}"
+
+USERNAME="ubuntu"
+CONTAINER_NAME="devimage"
+
+if [[ "${COMMAND,,:-}" == "run" ]]; then
+    docker run \
+        -it \
+        --rm \
+        --user "${USERNAME}" \
+        -v "${PWD}:/home/${USERNAME}/toybox" \
+        --workdir "/home/${USERNAME}/toybox" \
+        devimage:latest
+elif [[ "${COMMAND,,:-}" == "build" ]]; then
+    echo "--- Building toybox image ---"
+    docker build \
+        --tag "${CONTAINER_NAME}:latest" \
+        .
+else
+    echo "What? ${COMMAND,,}"
+    exit 1
+fi
+
+exit 0
