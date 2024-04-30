@@ -40,7 +40,7 @@ class Launchable(ABC):
         if hasattr(self, "_node"):
             return self._node
         else:
-            raise NotImplementedError("You're not using the default name for node ('_node'). You must explicitly define node property.")
+            raise NotImplementedError("You're not using the default name for node ('_node'), so you must explicitly define node property.")
 
     @node.setter
     def node(self, node) -> None:
@@ -60,7 +60,7 @@ def launch(to_launch: Launchable) -> bool:
     # don't bother trying to launch anything that doesn't have
     # an associated Toybox Node
     if not hasattr(to_launch, "node"):
-        raise LaunchError(f"No 'node' member of Launchable <{to_launch}>. Cannot launch.") 
+        raise LaunchError(f"No 'node' member of Launchable <{to_launch}>. Cannot launch.")
 
     logger.LOG("DEBUG", f"Pre-launch for <{to_launch.node}>")
     pre_result: bool = to_launch.pre_launch()

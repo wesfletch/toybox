@@ -10,7 +10,7 @@ import socket
 import sys
 import threading
 import time
-from typing import Dict, List, Union, Tuple, Callable
+from typing import Dict, List, Union, Tuple, Callable, Optional
 
 import grpc
 from google.protobuf.message import Message, DecodeError
@@ -49,8 +49,8 @@ class Node():
         self,
         name: str,
         host: str = "localhost",
-        port: Union[int, None] = None,
-        log_level: Union[str,None] = None,
+        port: Optional[int] = None,
+        log_level: Optional[str] = None,
         # sock: Union[socket.socket,None] = None,
     ) -> None:
 
@@ -254,23 +254,6 @@ class Node():
             # messages that aren't explicitly handled just go into the inbound queues
             self._connections[conn].inbound.put(message.decode('utf-8'))
 
-    def advertise(
-        self,
-        topic_name: str,
-        message_type: Message
-    ) -> Union[Publisher,None]:
-        
-        pub: Publisher = self._configure_publisher(
-            topic_name=topic_name,
-            message_type=message_type,
-        )
-        if not pub.advertise(advertiser_id=self._name):
-            self.log("ERR", f"Failed to advertise topic <{topic_name}>")
-            return None
-        
-        self.log("DEBUG", f"Successfully advertised topic <{topic_name}> with message type <{message_type.DESCRIPTOR.full_name}>")
-        return pub
-
     def _configure_publisher(
         self, 
         topic_name: str, 
@@ -310,11 +293,28 @@ class Node():
         self.subscribers.append(subscriber)
         return subscriber
 
+    def advertise(
+        self,
+        topic_name: str,
+        message_type: Message
+    ) -> Union[Publisher,None]:
+        
+        pub: Publisher = self._configure_publisher(
+            topic_name=topic_name,
+            message_type=message_type,
+        )
+        if not pub.advertise(advertiser_id=self._name):
+            self.log("ERR", f"Failed to advertise topic <{topic_name}>")
+            return None
+        
+        self.log("DEBUG", f"Successfully advertised topic <{topic_name}> with message type <{message_type.DESCRIPTOR.full_name}>")
+        return pub
+
     def subscribe(
         self,
         topic_name: str,
         message_type: Message,
-        callback_fn: Union[Callable,None] = None
+        callback_fn: Optional[Callable] = None
     ) -> bool:
     
         # request information about publishers of a specific topic
