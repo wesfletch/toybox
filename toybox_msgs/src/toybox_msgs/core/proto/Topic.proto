@@ -1,4 +1,4 @@
-syntax = "proto2";
+syntax = "proto3";
 
 package core;
 
@@ -18,48 +18,48 @@ message PublisherList {
 }
 
 message Confirmation {
-    required string uuid = 1;
-    required int32 return_code = 2;
-    optional string status = 3;
+    string uuid = 1;
+    int32 return_code = 2;
+    string status = 3;
 }
 
 message TopicDefinition {
-    required string uuid = 1;
-    required string topic_name = 2;
-    required string message_type = 3;
+    string uuid = 1;
+    string topic_name = 2;
+    string message_type = 3;
 }
 
 message AdvertiseRequest {
-    required string client_id = 1;
-    required string host = 2;
-    required int32 topic_port = 3;
-    required TopicDefinition topic_def = 4;
+    string client_id = 1;
+    string host = 2;
+    int32 topic_port = 3;
+    TopicDefinition topic_def = 4;
 }
 
 message SubscribeResponse {
-    required Confirmation confirmation = 1;
+    Confirmation confirmation = 1;
     repeated string publisher_list = 2;
 }
 
 message SubscriptionRequest {
-    required TopicDefinition topic_def = 1;
+    TopicDefinition topic_def = 1;
 }
 
 message PublisherInfo {
-    required string publisher_id = 1;
-    required string publisher_host = 2;
-    required int32 topic_port = 3;
+    string publisher_id = 1;
+    string publisher_host = 2;
+    int32 topic_port = 3;
 }
 
 message SubscriptionResponse {
-    required Confirmation conf = 1;
-    required TopicDefinition topic_def = 2;
+    Confirmation conf = 1;
+    TopicDefinition topic_def = 2;
     repeated PublisherInfo publisher_list = 3;
 }
 
 // message TopicConfirmation {
-//     required Confirmation conf = 1;
-//     required TopicDefinition topic = 2;
+//     Confirmation conf = 1;
+//     TopicDefinition topic = 2;
 //     oneof client_list {
 //         SubscriberList subscribers = 3;
 //         PublisherList publishers = 4;

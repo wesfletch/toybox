@@ -1,4 +1,4 @@
-syntax = "proto2";
+syntax = "proto3";
 
 package core;
 
@@ -14,6 +14,6 @@ service Client {
 message Null {}
 
 message InformConfirmation {
-    required int32 return_code = 1;
-    optional string status = 2;
+    int32 return_code = 1;
+    string status = 2;
 }
