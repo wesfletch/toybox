@@ -1,4 +1,4 @@
-syntax = "proto2";
+syntax = "proto3";
 
 package core;
 
@@ -12,36 +12,36 @@ service Register {
 
 // or just use context.peer()
 message ClientMetadata {
-    required string addr = 1;
-    required int32 port = 2;
-    optional int32 data_port = 3;
+    string addr = 1;
+    int32 port = 2;
+    int32 data_port = 3;
 }
 
 message Client_ID {
-    required string client_id = 1;
+    string client_id = 1;
 }
 
 message ClientInfo {
-    required string client_id = 1;
-    required ClientMetadata meta = 2;
+    string client_id = 1;
+    ClientMetadata meta = 2;
 }
 
 message ClientResponse {
-    required int32 return_code = 1;
-    optional ClientInfo client = 2;
-    optional string status = 3;
+    int32 return_code = 1;
+    ClientInfo client = 2;
+    string status = 3;
 }
 
 message RegisterRequest {
-    required string client_id = 1;
-    required ClientMetadata meta = 2;
+    string client_id = 1;
+    ClientMetadata meta = 2;
 }
 
 message RegisterResponse {
-    required int32 return_code = 1;
-    optional string status = 2;
+    int32 return_code = 1;
+    string status = 2;
 }
 
 message DeRegisterRequest {
-    required string client_id = 1;
+    string client_id = 1;
 }
