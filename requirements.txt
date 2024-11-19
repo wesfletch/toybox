@@ -1,14 +1,7 @@
-## opengl-related requirements
-pyglet
-moderngl
-
 # ipc
 protobuf
 grpcio # gRPC
 grpcio-tools
-
-# general
-# futures
 
 # static type checking
 types-protobuf

@@ -7,25 +7,33 @@ set -o nounset
 
 COMMAND="${1:-"run"}"
 
-USERNAME="ubuntu"
-CONTAINER_NAME="devimage"
+USERNAME="${USER:-ubuntu}"
+CONTAINER_NAME="toybox"
 
 if [[ "${COMMAND,,:-}" == "run" ]]; then
+    
     docker run \
         -it \
         --rm \
         --user "${USERNAME}" \
-        -v "${PWD}:/home/${USERNAME}/toybox" \
+        --volume "${PWD}:/home/${USERNAME}/toybox" \
+        --volume "/tmp/.X11-unix:/tmp/.X11-unix" \
         --workdir "/home/${USERNAME}/toybox" \
-        devimage:latest
+        -e DISPLAY \
+        "${CONTAINER_NAME}":latest
+
 elif [[ "${COMMAND,,:-}" == "build" ]]; then
-    echo "--- Building toybox image ---"
+    
+    echo "--- Building ${CONTAINER_NAME} image ---"
     docker build \
         --tag "${CONTAINER_NAME}:latest" \
+        --build-arg USER="${USERNAME}" \
+        --build-arg UID="${UID}" \
         .
+
 else
+
     echo "What? ${COMMAND,,}"
     exit 1
-fi
 
-exit 0
+fi
