@@ -1,9 +1,9 @@
-syntax = "proto2";
+syntax = "proto3";
 
-package state_msgs;
+package state;
 
 message Velocity {
-    optional float x = 1 [default = 0.0];
-    optional float y = 2 [default = 0.0];
-    optional float z = 3 [default = 0.0];
+    float x = 1;
+    float y = 2;
+    float z = 3;
 }

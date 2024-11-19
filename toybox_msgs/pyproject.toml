@@ -1,3 +1,7 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "toybox_msgs"
 description = "Simple (toy) robotics stack messages"
@@ -5,18 +9,26 @@ version = "0.0.1"
 authors = [
     {name="Wes Fletcher", email="please@donot.com"},
 ]
+maintainers = [
+  {name = "Wes Fletcher", email = "please@donot.com"}
+]
 readme = "README.md"
+license = { file = "LICENSE" }
 
 requires-python = ">=3.8"
 dependencies = [
-    "protobuf",
+    # "protobuf",
     "grpcio", # gRPC
     "grpcio-tools",
 ]
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+[project.urls]
+"Source" = "https://github.com/wesfletch/toybox"
+
+# [tool.hatch.metadata]
+# sources = [ # I don't think this actually exists
+#     {path = "src"}
+# ]
 
 [tool.hatch.build.targets.wheel]
 ignore-vcs = true

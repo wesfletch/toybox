@@ -2,6 +2,8 @@
 
 # Automatically generate the protobuf messages defined
 #   in the subdirectories of toybox_msgs
+# TODO: make this work top-down, instead of calling
+#   each subdirs copy of this, so that I can cross-reference msgs
 
 SCRIPT="$(realpath "$0")"
 BASEDIR="$(dirname "${SCRIPT}")"
@@ -16,7 +18,10 @@ for directory in */; do # loop through all subdirs
     # if a directory has it's own build_messages exec, just do that
     if [[ -x "${directory}/build_messages" ]]; then
         echo "Executing sub-dir build_messages: ${directory}"
-        "${directory}/build_messages"
+        if ! "${directory}/build_messages"; then
+            echo "ERR: failed to build_messages for ${directory}."
+            exit 1
+        fi
     else
         [[ "${directory}" == "build" ]] && continue
         [[ ! -d "${IN_DIR}" ]] && continue
@@ -36,7 +41,6 @@ for directory in */; do # loop through all subdirs
             --python_out="${OUT_DIR}" \
             ${IN_DIR}/*.proto
     fi
-
 done
 
 popd >>/dev/null || exit
