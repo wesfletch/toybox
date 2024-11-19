@@ -2,7 +2,7 @@
 **/.mypy_cache/*
 **/*.egg-info
 
-**/resources/*
+**/resources/*.png
 .toyboxrc
 
 env/*
