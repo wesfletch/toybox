@@ -1,20 +1,14 @@
 #!/usr/bin/env python3
 
 from dataclasses import dataclass
-from typing import Dict, List, Tuple, Union, Callable
-
-from entity import Entity, Agent
-from plugin import Plugin, DiffDrivePlugin, PLUGIN_TYPE
-from primitives import Pose, Position, Orientation, Velocity
-from gui import SimWindow
-
-import file_parse
-
 import time
+from typing import Any, Callable, cast, Dict, List, Tuple, Union 
 
-@dataclass
-class WorldState:
-    pass
+from toybox_sim.entities import Entity
+from toybox_sim.plugins.plugins import Plugin, PLUGIN_TYPE, BaseControlPluginIF
+from toybox_sim.plugins.DiffDrivePlugin import DiffDrivePlugin
+from toybox_sim.gui import SimWindow
+import toybox_sim.file_parse
 
 
 class World:
@@ -23,19 +17,20 @@ class World:
         self, 
         name: str = "default",
         entities: Dict[str,Entity] = {},
-        window: Union[SimWindow, None] = None
+        window: SimWindow | None = None
     ) -> None:
         
         self._name: str = name
         self._entities: Dict[str, Entity] = entities
         self._time: float = 0.0
-        self._loop_frequency: int = 20
+        self._loop_frequency: int = 60
         
         # handle GUI if present
-        self._window = window
+        self._window: SimWindow | None = window
         self._USE_GUI = True if (self._window is not None) else False
-        if self._USE_GUI:
-            window.load_visuals(self._entities)
+        
+        if self._USE_GUI and self.window is not None:
+            self.window.load_visuals(self._entities)
 
     @property
     def name(self) -> str:
@@ -58,13 +53,20 @@ class World:
         self._USE_GUI = use_gui
 
     @property
-    def window(self) -> SimWindow:
+    def window(self) -> SimWindow | None:
         return self._window
     
     @window.setter
     def window(self, window: SimWindow) -> None:
         self._window = window
         self._USE_GUI = True
+        
+        print("window_setter")
+        
+        for entity in self.entities:
+            print(f"{entity}, {self.entities[entity].plugins}")
+
+        self._window.entities = self._entities
         self._window.load_visuals(self.entities)
         self._window.schedule_loop(self.step, frequency=self._loop_frequency)
 
@@ -80,8 +82,11 @@ class World:
     def run(self) -> None:
 
         # if we're using GUI, let pyglet handle the loop
-        if self._USE_GUI:
+        if self._USE_GUI and self.window is not None:
+            for entity in self.entities:
+                print(f"{entity}, {self.entities[entity].plugins}")
             self.window.run()
+
         else:
             self.loop()
 
@@ -105,52 +110,72 @@ class World:
                 time.sleep(loop_period - time_delta)
             start_time = time.time() 
 
-            print(self._time)
-            
-    def step(self, dt: float = 0.01) -> None:
+    def step(
+        self, 
+        dt: float = 0.01
+    ) -> None:
 
         # ripe for parallelization
-        for entity in self._entities.values():
-            # plugin_types: Dict[PLUGIN_TYPE, str] = entity.plugin_types
-            plugin: Plugin
+        for entity_id in self._entities:
+            
+            entity: Entity = self._entities[entity_id]
+
+            # How much this entity will move; default is not moving at all
+            position_delta: Tuple[float,float,float] = (0.0,0.0,0.0)
+
+            # If the entity has a BASE_CONTROL plugin, this is how we'll
+            # report it's expected position change while respecting the plugins
+            # motion model.
+            plugin_delta: Tuple[float,float,float] | None = None
 
             for plugin in entity.plugins.values():
-                if plugin.id == "DiffyDrivington":
-                    plugin.set_velocity_target(1.0,3.14)
+                
                 plugin.call()
 
-        self.update_positions()
+                if plugin.plugin_type is PLUGIN_TYPE.MOVEMENT:
+                    pass
+                elif plugin.plugin_type is PLUGIN_TYPE.BASE_CONTROL:
+                    # BASE_CONTROL plugins determine their own position deltas
+                    # based on internal motion models. We need to "ask" the plugin
+                    # what motion will look like based on it's current velocity, pose,
+                    # and dt.
+                    assert isinstance(plugin, BaseControlPluginIF)
+
+                    # TODO: This should probably go away...
+                    if plugin.id == "DiffyDrivington":
+                        plugin.set_target_velocity(1, 3.14 / 20)
+                    elif plugin.id == "DiffyDrivington2":
+                        plugin.set_target_velocity(0, 3.14)
+
+                    vel_target: Tuple[float,float] = plugin.get_target_velocity()
+                    plugin_delta = plugin.get_pose_change(
+                        velocity=vel_target, # For now, unmodified
+                        current_pose=entity.pose,
+                        dt=dt)
+
+                elif plugin.plugin_type is PLUGIN_TYPE.INTEROCEPTIVE:
+                    pass
+                elif plugin.plugin_type is PLUGIN_TYPE.EXTEROCEPTIVE:
+                    pass
+                else:
+                    print(f"Unhandled plugin type: {plugin.plugin_type}")
+                
+
+            # If any of the plugins applied a position change, add it to the position_delta
+            if plugin_delta is not None:
+                position_delta = tuple(sum(x) for x in zip(position_delta, plugin_delta))
+            
+            entity.pose.update(delta_p=position_delta)
+
         self._time += dt
-
-    def update_positions(self) -> None:
-        
-        if not self._USE_GUI:
-            return
-
-        for entity in self._entities.values():
-            if entity.id in self.window._sprite_map.keys():
-                # get position in sim scale ("grid-space")
-                grid_x, grid_y = self.window.get_grid_coordinates(entity.pose.position.x, 
-                                                                  entity.pose.position.y)
-                self.window.move_sprite(id=entity.id,
-                                        x=grid_x,
-                                        y=grid_y)
-
-
-    # FUNCTIONS TO BE CALLED BY ENTITIES
-    # def move(
-    #     self,
-    #     motion_model: Callable[[Velocity, Pose], 
-    #                             Tuple[float,float,float]],
-    # )
 
 def main():
     
     sim_window: SimWindow = SimWindow()
 
-    worldy: World = file_parse.parse_world_file("base_config.json")
-    # worldy.window = sim_window
-    # worldy.window.run()
+    worldy: World = toybox_sim.file_parse.parse_world_file("/home/wfletcher/toybox/toybox_sim/resources/base_config.json")
+    worldy.window = sim_window
+
     worldy.run()
 
 

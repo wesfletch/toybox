@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 
-from dataclasses import dataclass
+from dataclasses import dataclass,field
 from typing import List, Tuple
 
 from math import pi as PI
+
+from toybox_msgs.state.Position_pb2 import Position as PositionMsg
+from toybox_msgs.state.Velocity_pb2 import Velocity as VelocityMsg
+from toybox_msgs.state.Orientation_pb2 import Orientation2D as OrientationMsg
+from toybox_msgs.state.Pose_pb2 import Pose2D as PoseMsg
 
 class Polygon():
     """Simple polygon representation.
@@ -25,6 +30,9 @@ class Velocity:
     y: float = 0.0
     z: float = 0.0
 
+    def to_msg(self) -> VelocityMsg:
+        return VelocityMsg(x=self.x, y=self.y, z=self.z)
+    
 # 2D for now
 @dataclass
 class Position:
@@ -33,6 +41,10 @@ class Position:
     """
     x: float = 0.0
     y: float = 0.0
+    z: float = 0.0
+
+    def to_msg(self) -> PositionMsg:
+        return PositionMsg(x=self.x, y=self.y, z=self.z)
 
 # 2D for now
 @dataclass
@@ -42,11 +54,14 @@ class Orientation:
     """
     theta: float = 0.0 # radians
 
+    def to_msg(self) -> OrientationMsg:
+        return OrientationMsg(theta=self.theta) 
+
 # 2D for now
 @dataclass
 class Pose:
-    position: Position = Position()
-    orientation: Orientation = Orientation()
+    position: Position = field(default_factory=Position)
+    orientation: Orientation = field(default_factory=Orientation)
 
     def update(
         self,
@@ -56,9 +71,29 @@ class Pose:
         self.position.x = self.position.x + delta_p[0]
         self.position.y = self.position.y + delta_p[1]
         self.orientation.theta = (self.orientation.theta + delta_p[2]) % (2*PI)
+    
+    def to_msg(self) -> PoseMsg:
+        return PoseMsg(position=self.position.to_msg(), orientation=self.orientation.to_msg())
 
 class State:
 
     def __init__(self) -> None:
-        pass 
+        pass
 
+
+def main():
+    
+    # Just making sure all of these work
+    vel: Velocity = Velocity(x=1.0,y=0.0,z=0.0)
+    pos: Position = Position(x=0.1,y=0.1,z=0.1)
+    ori: Orientation = Orientation(theta=3.14159)
+
+    print(vel.to_msg())
+    print(pos.to_msg())
+    print(ori.to_msg())
+
+    pose: Pose = Pose(position=pos, orientation=ori)
+    print(pose.to_msg())
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,57 @@
+{
+    "name": "TestWorld",
+    "entities":
+    [
+        {
+            "id": "test",
+            "sprite": "star.png",
+            "model": "box.ply",
+            "plugins": 
+            [
+                {
+                    "plugin_id": "DiffyDrivington", 
+                    "type": "DiffDrivePlugin",
+
+                    "wheel_radius": 0.05,
+                    "wheel_base": 0.1,
+                    
+                    "min_accel_x": 0.01,
+                    "max_accel_x": 0.1,
+                    "min_accel_theta": 0.01,
+                    "max_accel_theta": 0.1,
+
+                    "use_vel_target_timeout": false,
+                    "vel_target_timeout": 1.0
+                }
+            ],
+            "position": {
+                "x": 1.0,
+                "y": 5.0,
+                "z": 0.0
+            }
+        },
+        {
+            "id": "testy",
+            "sprite": "star.png",
+            "model": "box2.ply",
+            "plugins": 
+            [
+                {
+                    "plugin_id": "DiffyDrivington2", 
+                    "type": "DiffDrivePlugin",
+
+                    "wheel_radius": 0.05,
+                    "wheel_base": 0.1,
+                    
+                    "min_accel_x": 0.01,
+                    "max_accel_x": 0.1,
+                    "min_accel_theta": 0.01,
+                    "max_accel_theta": 0.1,
+
+                    "use_vel_target_timeout": false,
+                    "vel_target_timeout": 1.0
+                }
+            ]
+        }
+    ]
+}
