@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package state;
+
+import "Orientation.proto";
+import "Position.proto";
+
+message Pose2D {
+    Position position = 1;
+    Orientation2D orientation = 2;
+}
