@@ -25,7 +25,7 @@ class PicoBridge(Launchable):
         self._name = name
         self._node: Node = tbx.init_node(
             name=self._name,
-            log_level="INFO"
+            log_level="DEBUG"
         )
 
         self._publisher: Optional[Publisher] = self._node.advertise(
@@ -58,7 +58,7 @@ class Listener(Launchable):
         self._name = name
         self._node: Node = tbx.init_node(
             name=self._name,
-            log_level="INFO"
+            log_level="DEBUG"
         )    
 
         self._subscribed: bool = self._node.subscribe(
@@ -66,7 +66,7 @@ class Listener(Launchable):
             message_type=TestMessage,
             callback_fn=self.callback
         )
-        
+
     def callback(self, message: TestMessage) -> None:
         print(message)
 
@@ -78,10 +78,9 @@ class Listener(Launchable):
         freq: int = 10
         while not self._node.is_shutdown():
             time.sleep(1/freq)
-
-    # @property
-    # def node(self) -> Node:
-    #     return self._node
+    
+    def post_launch(self) -> bool:
+        return True
 
 def main() -> None:
 
