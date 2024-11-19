@@ -1,0 +1,22 @@
+[project]
+name = "toybox_examples"
+description = "toy robotics stack examples"
+version = "0.0.1"
+authors = [
+    {name = "Wes Fletcher", email = "please@donot.com"},
+]
+readme = "README.md"
+
+requires-python = ">=3.8.2"
+dependencies = [
+    "toybox_core",
+    "toybox_msgs",
+    "toybox_sim"
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["launch", "src"]
