@@ -1,0 +1,20 @@
+ply
+format ascii 1.0
+comment Test Box
+element vertex 5
+property float x
+property float y
+property float z
+element color 1
+property uint red
+property uint green
+property uint blue
+end_header
+comment vertex
+0 0 0
+0.5 0 0
+0.75 0.25 0
+0.5 0.5 0
+0.0 0.5 0
+comment color
+100 100 100

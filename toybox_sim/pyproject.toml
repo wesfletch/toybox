@@ -1,3 +1,7 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "toybox_sim"
 version = "0.0.1"
@@ -6,8 +10,15 @@ authors = [
 ]
 description = "Simple (toy) robotics simulation"
 readme = "README.md"
-requires-python = ">=3.8"
-classifiers = []
+license = { file = "LICENSE" }
 
-[project-urls]
-"Homepage" = "https://github.com/wesfletch/toybox"
+requires-python = ">=3.8"
+dependencies = [
+    "pyglet",
+    "moderngl",
+    "toybox_core",
+    "toybox_msgs"
+]
+
+[project.urls]
+"Source" = "https://github.com/wesfletch/toybox"
