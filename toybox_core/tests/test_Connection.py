@@ -12,8 +12,8 @@ import struct
 import sys
 import threading
 
-sys.path.append('/home/dev/toybox')
-from toybox_core.src.Connection import (
+# sys.path.append('/home/dev/toybox')
+from toybox_core.Connection import (
     Connection,
     Subscriber, 
     Publisher

@@ -1,49 +1,21 @@
 #!/usr/bin/env python3
 
-from abc import ABC, abstractmethod
-import atexit
-from dataclasses import dataclass, field
-import errno
-from queue import Queue, Empty
-import select
-import socket
-import struct
-import sys
-import threading
-import time
-from typing import Dict, List, Union, Tuple, Callable
-import uuid
+"""
+FILE: Client.py
+DESC: Functions intended to be used by the 'clients' of this library
+      when interfacing with tbx.
+"""
 
-import grpc
-from google.protobuf.message import Message, DecodeError
-import concurrent.futures as futures
+import atexit
+import threading
+from typing import List, Union, Tuple
 
 from toybox_core.Logging import LOG
 from toybox_core.Node import Node
-from toybox_core.Connection import (
-    get_available_port
-)
-import toybox_msgs.core.Register_pb2 as Register_pb2
-from toybox_core.RegisterServer import (
-    register_client_rpc,
-    deregister_client_rpc,
-    get_client_info_rpc,
-)
-from toybox_core.TopicServer import (
-    advertise_topic_rpc,
-    subscribe_topic_rpc,
-    Topic,
-)
-import toybox_msgs.core.Client_pb2 as Client_pb2
-from toybox_msgs.core.Client_pb2_grpc import (
-    ClientServicer,
-    add_ClientServicer_to_server,
-)
-from toybox_msgs.core.Topic_pb2 import (
-    SubscriberList,
-    TopicDefinition,
-)
-import toybox_msgs.core.Topic_pb2 as Topic_pb2
+from toybox_core.Connection import get_available_port
+from toybox_core.RegisterServer import register_client_rpc, deregister_client_rpc
+from toybox_core.TopicServer import advertise_topic_rpc, subscribe_topic_rpc
+
 
 # This shutdown approach won't work. Python processes
 # run with their own memory, so setting this value
@@ -72,11 +44,17 @@ def deinit_node(
     
 def init_node(
     name: str,
-    address: Union[Tuple[str,int], None] = None,
-    log_level: Union[str,None] = None,
+    address: Tuple[str,int] | None = None,
+    log_level: str | None = None,
 ) -> Node:
-    
-    if not address:
+    """
+    Create a toybox node with the given name.
+
+    Returns:
+        _type_: _description_
+    """
+
+    if address is None:
         host: str = "localhost"
         port: int = get_available_port(host="localhost")
     else:
@@ -129,5 +107,7 @@ def subscribe_topic(
         message_type=message_type,
     )
     
+    # TODO: obviously this was left unfinished...
+    #       What was I going to do here?
     for publisher in publishers:
         pass

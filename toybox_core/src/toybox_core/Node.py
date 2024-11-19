@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
 
-from abc import ABC
 import atexit
-from dataclasses import dataclass, field
-import errno
 from queue import Queue, Empty
 import select
 import socket
-import sys
 import threading
 import time
 from typing import Dict, List, Union, Tuple, Callable, Optional
@@ -15,9 +11,6 @@ from typing import Dict, List, Union, Tuple, Callable, Optional
 import grpc
 from google.protobuf.message import Message, DecodeError
 import concurrent.futures as futures
-
-# stupid hack because pip is the worst
-sys.path.append('/home/dev/toybox')
 
 from toybox_core.Connection import (
     Connection,
@@ -27,20 +20,11 @@ from toybox_core.Connection import (
 )
 
 import toybox_msgs.core.Register_pb2 as Register_pb2
-from toybox_core.TopicServer import (
-    subscribe_topic_rpc,
-    Topic,
-)
+from toybox_core.TopicServer import subscribe_topic_rpc
 
-from toybox_core.ClientServer import (
-    ClientRPCServicer
-)
-from toybox_msgs.core.Client_pb2_grpc import (
-    add_ClientServicer_to_server,
-)
-
+from toybox_core.ClientServer import ClientRPCServicer
+from toybox_msgs.core.Client_pb2_grpc import add_ClientServicer_to_server
 import toybox_msgs.core.Topic_pb2 as Topic_pb2
-
 from toybox_core.Logging import TbxLogger
 
 class Node():
@@ -51,7 +35,6 @@ class Node():
         host: str = "localhost",
         port: Optional[int] = None,
         log_level: Optional[str] = None,
-        # sock: Union[socket.socket,None] = None,
     ) -> None:
 
         self._name = name
@@ -108,8 +91,11 @@ class Node():
         return self._shutdown
 
     def _configure_rpc_servicer(self) -> None:
+        """
+        Create the RPC server that we'll use to field RPCs from other clients.
+        """
 
-        self._rpc_server = grpc.server(
+        self._rpc_server: grpc.server = grpc.server(
             thread_pool=self._executor,
         )
         add_ClientServicer_to_server(
@@ -153,15 +139,55 @@ class Node():
         self._msg_socket.shutdown(socket.SHUT_RDWR)
         self._msg_socket.close()
 
-    def _spin(
-        self
-    ) -> None:
+    def _spin_once(self) -> None:
         """
-        Message-handling loop.
+        Message-handling loop. One-shot.
         """
 
         ready_to_read: List[socket.socket] = []
         ready_to_write: List[socket.socket] = []
+
+        # acquire the "connection" mutex to ensure we don't read the list while it's changing
+        if not self._conn_lock.acquire(blocking=False):
+            return
+
+        # get available [in/out]bound sockets
+        connections: List[socket.socket] = self._connections.keys() 
+        ready_to_read, ready_to_write, _ = select.select(
+            connections, 
+            connections, 
+            [], 0)
+        self._conn_lock.release()
+
+        message: bytes
+
+        # TODO: I've somehow turned this whole block into dead code??? Figure that out.
+        for conn in ready_to_read:
+            message = self._connections[conn].read(conn=conn)
+            self._handle_message(conn=conn, message=message)
+
+        for conn in ready_to_write:
+            connection: Connection | None = self.connections.get(conn, None)
+            if connection is None:
+                # connection might have been deleted by another thread
+                continue
+            elif not connection.initialized:
+                # we can't trust un-initialized connections to behave
+                continue
+
+            try:
+                message = self._connections[conn].outbound.get(block=False)
+            except Empty:
+                continue
+
+            self.log("DEBUG", f"<{self._name}> sent message to {self._connections[conn].name}: {message}")
+            self._connections[conn].sock.sendall(message)
+
+
+    def _spin(self) -> None:
+        """
+        Message-handling loop.
+        """
         
         # service ephemeral connections
         while not self._shutdown:
@@ -170,37 +196,7 @@ class Node():
             #       should probably figure out why
             time.sleep(0.01)
             
-            # acquire the "connection" mutex to ensure we don't read the list while it's changing
-            if not self._conn_lock.acquire(blocking=False):
-                continue
-
-            # get available [in/out]bound sockets
-            connections: List[socket.socket] = self._connections.keys() 
-            ready_to_read, ready_to_write, _ = select.select(connections, 
-                                                             connections, 
-                                                             [], 0)
-            self._conn_lock.release()
-
-            for conn in ready_to_read:
-                message: bytes = self._connections[conn].read(conn=conn)
-                self._handle_message(conn=conn, message=message)
-
-            for conn in ready_to_write:
-                connection: Union[Connection,None] = self.connections.get(conn, None)
-                if connection is None:
-                    # connection might have been deleted by another thread
-                    continue
-                elif connection.initialized == False:
-                    # we can't trust un-initialized connections to behave
-                    continue
-
-                try:
-                    message: bytes = self._connections[conn].outbound.get(block=False)
-                except Empty:
-                    continue
-
-                self.log("DEBUG", f"<{self._name}> sent message to {self._connections[conn].name}: {message}")
-                self._connections[conn].sock.sendall(message)
+            self._spin_once()
 
 
     def _handle_message(
@@ -209,13 +205,18 @@ class Node():
         message: bytes,
     ) -> None:
         """
-        TODO: awaiting refactor
+        Handle messages that come in from TBX servers or other nodes for the management
+        of this Node, e.g., introductions from other nodes.
+
+        TODO: awaiting refactor... Does this function even get called anymore? How on earth is this
+                still working?
 
         Args:
             conn (socket.socket): _description_
             message (bytes): _description_
         """
 
+        # TODO: this isn't even correct anymore... What is going on here?
         message_type, message_data = Connection.split_message(message)
 
         self.log("DEBUG",f'<{self._name}> received: \n\tmessage_type=<{message_type}>\n\tmessage={message_data!r}')
@@ -250,7 +251,7 @@ class Node():
             self.log("DEBUG", f"{self._name}: {confirmation}")
 
         else:
-            self.log("DEBUG", f"got unhandled message type: <{message_type}>")
+            self.log("DEBUG", f"Got unhandled message type: <{message_type}>")
             # messages that aren't explicitly handled just go into the inbound queues
             self._connections[conn].inbound.put(message.decode('utf-8'))
 
@@ -260,7 +261,8 @@ class Node():
         message_type: str
     ) -> Publisher:
 
-        # create a publisher connection
+        # create a publisher, 
+        # REMEMBER: PUblishers don't connect().
         publisher: Publisher = Publisher(
             topic_name=topic_name,
             message_type=message_type,
@@ -269,14 +271,13 @@ class Node():
             logger=self._logger
         )
 
-        self.publishers.append(publisher)
         return publisher
 
     def _configure_subscriber(
         self, 
         topic_name: str, 
         message_type: Message, 
-        publisher_info: Tuple[str,str,int],
+        publisher_info: Tuple[str,str,int] | None,
         callback: Union[Callable, None] = None,
     ) -> Subscriber:
 
@@ -297,17 +298,32 @@ class Node():
         self,
         topic_name: str,
         message_type: Message
-    ) -> Union[Publisher,None]:
-        
+    ) -> Publisher | None:
+        """
+        Advertise a topic that this Node plans to publish.
+
+        Args:
+            topic_name (str): The name of the topic
+            message_type (Message): The message type of the topic
+
+        Returns:
+            PUblisher | None : If the topic was advertised properly, returns the Publisher, \
+                                   otherwise returns None
+        """
+
         pub: Publisher = self._configure_publisher(
             topic_name=topic_name,
             message_type=message_type,
         )
+        # TODO: see body of _configure_publisher, this doesn't make any sense. 
+        # Why am I appending to 
         if not pub.advertise(advertiser_id=self._name):
             self.log("ERR", f"Failed to advertise topic <{topic_name}>")
             return None
         
         self.log("DEBUG", f"Successfully advertised topic <{topic_name}> with message type <{message_type.DESCRIPTOR.full_name}>")
+        
+        self.publishers.append(pub)
         return pub
 
     def subscribe(
@@ -336,7 +352,9 @@ class Node():
                 callback=callback_fn,
             )
         else:
+            self.log("DEBUG", f"At least one publisher for topic <{topic_name}>")
             for publisher in publishers:
+                self.log("DEBUG", f"Subscribing to <{topic_name}> from publisher <{publisher[0]}>")
                 self._configure_subscriber(
                     topic_name=topic_name,
                     message_type=message_type,
@@ -358,8 +376,11 @@ class Node():
         log_level: str
     ) -> None:
         
-        self._logger.set_log_level(log_level=log_level)
-
+        try:
+            self._logger.set_log_level(log_level=log_level)
+        except KeyError as e:
+            self.log("ERROR", str(e))
+    
     def __str__(self) -> str:
         return self._name
 

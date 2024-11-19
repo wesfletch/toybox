@@ -40,7 +40,8 @@ class Launchable(ABC):
         if hasattr(self, "_node"):
             return self._node
         else:
-            raise NotImplementedError("You're not using the default name for node ('_node'), so you must explicitly define node property.")
+            raise NotImplementedError("You're not using the default name for node ('_node'), \
+                                      so you must explicitly define the `node` property.")
 
     @node.setter
     def node(self, node) -> None:
@@ -81,4 +82,3 @@ def launch(to_launch: Launchable) -> bool:
     to_launch.node.shutdown()
 
     return True
-

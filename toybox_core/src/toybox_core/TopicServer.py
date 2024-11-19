@@ -58,7 +58,7 @@ class TopicRPCServicer(TopicServicer):
         conf.status = ""
 
         # check if this topic already exists
-        topic: Union[Topic,None] = self._topics.get(topic_name, None)
+        topic: Topic | None = self._topics.get(topic_name, None)
         if topic is not None:
             # TODO: I think I'd rather not allow two topics to share a name at all. But we'll see...
             # don't allow a publisher to re-declare a topic
@@ -74,9 +74,10 @@ class TopicRPCServicer(TopicServicer):
                 topic.publishers[advertiser_id] = (advertiser_host, advertiser_port)
                 conf.status = f"Topic <{topic_name}> advertised successfully."
         else:   
-            self._topics[topic_name] = Topic(name=topic_name,
-                                            message_type=message_type,
-                                            publishers={advertiser_id: (advertiser_host, advertiser_port)})
+            self._topics[topic_name] = Topic(
+                name=topic_name,
+                message_type=message_type,
+                publishers={advertiser_id: (advertiser_host, advertiser_port)})
             conf.status = f"Topic <{topic_name}> from client <{advertiser_id}> advertised successfully."
         
         return conf
@@ -109,13 +110,12 @@ class TopicRPCServicer(TopicServicer):
         response.conf.return_code = 0
         response.topic_def.CopyFrom(request)
 
-        topic: Union[Topic,None] = self._topics.get(topic_name, None) 
+        topic: Topic | None = self._topics.get(topic_name, None) 
         if topic is None:
             self._topics[topic_name] = Topic(
                 name=topic_name,
                 message_type=message_type,
-                subscribers=[uuid]
-            )
+                subscribers=[uuid])
         else:
             topic.subscribers.append(uuid)
 
@@ -125,9 +125,10 @@ class TopicRPCServicer(TopicServicer):
                 if publisher_info is None:
                     raise Exception("something's wrong here") 
                 
-                response.publisher_list.add(publisher_id=publisher,
-                                            publisher_host=publisher_info[0],
-                                            topic_port=publisher_info[1])
+                response.publisher_list.add(
+                    publisher_id=publisher,
+                    publisher_host=publisher_info[0],
+                    topic_port=publisher_info[1])
 
         return response
 
@@ -183,9 +184,6 @@ def subscribe_topic_rpc(
     topic_name: str,
     message_type: str,
 ) -> List[Tuple[str,str,int]]:
-    
-    print(f"topic_name: {type(topic_name)}")
-    print(f"message_type: {type(message_type)}")
 
     subscribe_req: TopicDefinition = TopicDefinition(
         uuid=str(uuid.uuid4()),
