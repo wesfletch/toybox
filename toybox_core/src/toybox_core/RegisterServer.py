@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 
-from abc import ABC
-from dataclasses import dataclass, field
-import sys
-from typing import Dict, List, Tuple, Union
+from dataclasses import dataclass
+from typing import Dict, Union
 
 import grpc
 import concurrent.futures as futures
@@ -29,15 +27,13 @@ class RegisterServicer(Register_pb2_grpc.RegisterServicer):
         topics: Dict[str,Topic],
     ) -> None:
         self._clients: Dict[str,Client] = clients
-        self._topics: Dict[str, Topic] = topics
+        self._topics: Dict[str,Topic] = topics
 
     def RegisterClient(
         self, 
         request: Register_pb2.RegisterRequest, 
         context: grpc.ServicerContext
     ) -> Register_pb2.RegisterResponse:
-
-        # print(f'peer: {context.peer()}')
 
         client_id: str = request.client_id
         meta: Register_pb2.ClientMetadata = request.meta

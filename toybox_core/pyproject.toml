@@ -1,28 +1,28 @@
-[project]
-name = "toybox_core"
-description = "toy robotics stack core"
-version = "0.0.1"
-authors = [
-    {name = "Wes Fletcher", email = "please@donot.com"},
-]
-readme = "README.md"
-
-requires-python = ">=3.8.2"
-dependencies = [
-    "protobuf",
-    "grpcio", # gRPC
-    "grpcio-tools",
-]
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[project]
+name = "toybox_core"
+version = "0.0.1"
+description = "toy robotics stack core"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+    {name = "Wes Fletcher", email = "please@donot.com"},
+]
+requires-python = ">=3.8.2"
+dependencies = [
+    "grpcio", # gRPC
+    "grpcio-tools",
+    "toybox_msgs",
+]
+
+[project.urls]
+"Source" = "https://github.com/wesfletch/toybox"
+
+
 [tool.hatch.build.targets.sdist]
-# include = [
-#     "scripts/*",
-#     "src/*.py"
-# ]
 exclude = [
     "test/*"
 ]
@@ -35,3 +35,5 @@ exclude = [
 
 [project.scripts]
 tbx-server = "toybox_core.scripts.server:main"
+tbx-echo = "toybox_core.scripts.echo:main"
+tbx-publish = "toybox_core.scripts.publish:main"

@@ -43,15 +43,16 @@ def LOG(
 
     logger.log(log_levels[log_level], message)
 
-# rather than sub-classing logging.Logger like I should
+
+# Rather than sub-classing logging.Logger like I should...
 class TbxLogger():
 
     log_levels: Dict[str, int] = {
-        "DEBUG":logging.DEBUG,
-        "INFO":logging.INFO,
-        "WARN":logging.WARNING,
-        "ERR":logging.ERROR,
-        "FATAL":logging.CRITICAL
+        "DEBUG":    logging.DEBUG,
+        "INFO":     logging.INFO,
+        "WARN":     logging.WARNING,
+        "ERR":      logging.ERROR,
+        "FATAL":    logging.CRITICAL
     }
 
     def __init__(self, name: str) -> None:

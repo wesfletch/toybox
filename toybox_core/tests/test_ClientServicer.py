@@ -6,20 +6,20 @@ import concurrent.futures as futures
 import grpc
 import sys
 
-sys.path.append('/home/dev/toybox')
+# sys.path.append('/home/dev/toybox')
 import toybox_msgs.core.Client_pb2 as Client_pb2
 from toybox_msgs.core.Client_pb2_grpc import (
     # ClientRPCServicer,
     ClientStub,
     add_ClientServicer_to_server,
 )
-from toybox_core.src.Client import (
+from toybox_core.Client import (
     ClientRPCServicer,
 )
 from toybox_msgs.core.Topic_pb2 import (
     TopicDefinition,
 )
-from toybox_core.src.TopicServer import (
+from toybox_core.TopicServer import (
     Topic
 )
 
