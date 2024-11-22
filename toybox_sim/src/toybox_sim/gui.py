@@ -14,7 +14,7 @@ from pyglet.window import mouse, key
 from toybox_sim.entities import Entity
 from toybox_sim.ply_parse import parse, PlyModel, PlyElement, PlyProperty, ParseError
 
-pyglet.resource.path = ['../../resources']
+pyglet.resource.path = ["~/toybox/toybox_sim/resources/"]
 pyglet.resource.reindex()
 
 PIXELS_PER_METER: int = 40

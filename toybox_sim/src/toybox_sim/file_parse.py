@@ -6,7 +6,7 @@ from pydoc import locate
 
 from toybox_sim.entities import Entity
 from toybox_sim.plugins.plugins import Plugin
-from toybox_sim.simulate import World
+from toybox_sim.world import World
 
 from typing import Any, cast, Dict, List, Tuple
 
@@ -40,20 +40,17 @@ def parse_world_json(
     Returns:
         World: World object created by parsing the world file
     """
-    world_name: str = ""
-    entities: Dict[str,Entity] = {}
+    world_name: str | None = None
+    entities: Dict[str,Entity] | None = None
 
     if "name" in world_json:
         world_name = world_json["name"]
 
     if "entities" in world_json:
-        entities_json: List[str] = world_json["entities"]
+        entities_json: Dict[str,Any] = world_json["entities"]
         entities = parse_entities(entities_json)
 
-    return World(
-        name=world_name,
-        entities=entities
-    )
+    return World(name=world_name, entities=entities)
 
 def parse_entities(
     entities_json: Dict[str, Any],
@@ -89,11 +86,9 @@ def parse_entity(
         x: float = float(entity_config["position"]["x"])
         y: float = float(entity_config["position"]["y"])
         z: float = float(entity_config["position"]["z"])
-
         entity.pose.position.x = x
         entity.pose.position.y = y
-        # entity.pose.position.z = z
-        print(entity_config["position"])
+        entity.pose.position.z = z
     if "plugins" in entity_config:
         plugins: Dict[str,Plugin] = parse_plugins(entity_config["plugins"])
         entity.load_plugins(plugins)

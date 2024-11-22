@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 
-from typing import Any, Tuple, List, Dict, Union
+from typing import Dict
 
 from toybox_sim.plugins.plugins import Plugin, PluginNotFoundException
-from toybox_sim.primitives import Pose
+from toybox_sim.primitives import Pose, Velocity
+
 
 class Entity:
 
@@ -14,13 +15,16 @@ class Entity:
         plugins: Dict[str,Plugin] | None = None,
         sprite: str | None = None,
         model: str | None = None,
+        velocity: Velocity | None = None,
     ) -> None:
         
         self._id: str = id
-        self._pose: Pose = pose if (pose is not None) else Pose()
-        self._plugins: Dict[str,Plugin] = plugins if (plugins is not None) else {}
-        self._sprite: Union[str,None] = sprite
+        self._plugins: Dict[str,Plugin] = plugins if plugins else {}
+        self._sprite: str | None = sprite
         self._model: str | None = model
+
+        self._pose: Pose = pose if (pose is not None) else Pose()
+        self._velocity: Velocity = velocity if velocity else Velocity()
 
     @property
     def id(self) -> str:
@@ -35,7 +39,15 @@ class Entity:
         self._pose = pose
     
     @property
-    def sprite(self) -> Union[str,None]:
+    def velocity(self) -> Velocity:
+        return self._velocity
+
+    @velocity.setter
+    def velocity(self, new_vel: Velocity) -> None:
+        self._velocity = new_vel
+
+    @property
+    def sprite(self) -> str | None:
         return self._sprite
     
     @sprite.setter
