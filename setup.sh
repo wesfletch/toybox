@@ -22,10 +22,21 @@ pip install -r requirements.txt
 )
 
 echo "--- Installing toybox_* packages with pip ---"
-if ! pip install -e ./toybox_*; then
-    echo "Failed to install toybox packages"
-    exit 1
-fi
+
+
+# Unfortunately, it looks like I can't do it this way. Pip installing them all in one
+# command causes pip to install toybox dependencies of toybox packages the "normal" way, 
+# in site-packages, which means that they're NOT editable.
+# if ! pip install -e ./toybox_*; then
+#     echo "Failed to install toybox packages"
+#     exit 1
+# fi
+
+# We're stuck with this stupid way to do it until I dive deeper into this...
+# This is annoying because it won't resolve dependency order, so this script needs to be run several times.
+for package in ./toybox_*; do
+    pip install -e "${package}"
+done
 echo "--- Finished installing toybox_* packages ---"
 
 popd >/dev/null 2>&1 || exit # $TOYBOX_DIR
