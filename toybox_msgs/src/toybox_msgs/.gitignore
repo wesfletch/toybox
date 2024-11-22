@@ -1,0 +1,5 @@
+# Ignore everything in this dir...
+.
+
+# ...except for our proto definitions.
+!protos/*

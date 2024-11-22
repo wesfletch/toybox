@@ -2,8 +2,7 @@ syntax = "proto3";
 
 package core;
 
-import "Topic.proto";
-import "Register.proto";
+import "core/Topic.proto";
 
 service Client {
 

@@ -2,8 +2,8 @@ syntax = "proto3";
 
 package state;
 
-import "Orientation.proto";
-import "Position.proto";
+import "state/Orientation.proto";
+import "state/Position.proto";
 
 message Pose2D {
     Position position = 1;
