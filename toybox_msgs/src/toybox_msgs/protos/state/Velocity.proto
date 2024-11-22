@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package state;
+
+message Velocity {
+    float x = 1;
+    float y = 2;
+    float z = 3;
+}
+
+import "primitive/Vector.proto";
+message _Velocity {
+    primitive.Vector3 linear = 1;
+    primitive.Vector3 angular = 2;
+}

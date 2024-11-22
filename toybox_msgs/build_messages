@@ -1,46 +1,44 @@
 #!/usr/bin/env bash
 
 # Automatically generate the protobuf messages defined
-#   in the subdirectories of toybox_msgs
-# TODO: make this work top-down, instead of calling
-#   each subdirs copy of this, so that I can cross-reference msgs
+#   in the src/protos
+
+set -o errexit
+set -o pipefail
+set -o nounset
+# set -o xtrace
 
 SCRIPT="$(realpath "$0")"
 BASEDIR="$(dirname "${SCRIPT}")"
 
 pushd "./src/toybox_msgs" >>/dev/null|| exit
 
-for directory in */; do # loop through all subdirs
+DIRS=($(find ./protos/ -type d -printf '%P\n'))
+for directory in "${DIRS[@]}"; do
 
-    IN_DIR="${BASEDIR}/${directory}/proto"
-    OUT_DIR="${BASEDIR}/${directory}"
+    echo "---------------------------------------------------"
+    echo "Building protos from <${directory}> ..."
+    IN_DIR="${BASEDIR}/src/toybox_msgs/protos/${directory}/"
+    OUT_DIR="${BASEDIR}/src/toybox_msgs/"
 
-    # if a directory has it's own build_messages exec, just do that
-    if [[ -x "${directory}/build_messages" ]]; then
-        echo "Executing sub-dir build_messages: ${directory}"
-        if ! "${directory}/build_messages"; then
-            echo "ERR: failed to build_messages for ${directory}."
-            exit 1
-        fi
-    else
-        [[ "${directory}" == "build" ]] && continue
-        [[ ! -d "${IN_DIR}" ]] && continue
+    mkdir -p "${OUT_DIR}"
 
-        if [[ ! -d "${OUT_DIR}" ]]; then
-            mkdir -p "${OUT_DIR}"
-        fi
-        
-        # cp initpy.txt "${OUT_DIR}/__init__.py"
-
-        echo "Building messages in ${IN_DIR}"
-        # protoc -I="${IN_DIR}" \
-        #     --python_out="${OUT_DIR}" \
-        #     ${IN_DIR}/*.proto
-        python3 -m grpc_tools.protoc \
-            -I="${IN_DIR}" \
+    python3 -m grpc_tools.protoc \
+            --proto_path="${BASEDIR}/src/toybox_msgs/protos/" \
             --python_out="${OUT_DIR}" \
+            --grpc_python_out="${OUT_DIR}" \
+            --pyi_out="${OUT_DIR}" \
             ${IN_DIR}/*.proto
-    fi
+    
+    # protoc won't use relative imports for *_grpc.py files, for some reason,
+    # so we're modifying them in place here to explicity import from "toybox_msgs.*"
+    for file in "${OUT_DIR}/${directory}"/*pb2*.py; do
+        sed -E -i -e 's|^from ([A-Za-z0-9_]*) import|from toybox_msgs.\1 import|g' "${file}"
+    done
+
+    echo "---------------------------------------------------"
+
 done
+
 
 popd >>/dev/null || exit
