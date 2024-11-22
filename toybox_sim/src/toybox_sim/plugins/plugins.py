@@ -7,7 +7,7 @@ import uuid
 
 from typing import TYPE_CHECKING
 
-from toybox_sim.primitives import Pose
+from toybox_sim.primitives import Pose, Velocity
 if TYPE_CHECKING:
     from toybox_sim.entities import Entity
 
@@ -77,16 +77,16 @@ class BaseControlPluginIF(ABC):
     @abstractmethod
     def get_pose_change(        
         self, 
-        velocity: Tuple[float, float],
+        velocity: Velocity,
         current_pose: Pose,
         dt: float
     ) -> Tuple[float, float, float]:
         raise NotImplementedError
-    
+
     @abstractmethod
     def get_target_velocity(
         self
-    ) -> Tuple[float,float]:
+    ) -> Velocity:
         raise NotImplementedError
     
     @abstractmethod
