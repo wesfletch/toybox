@@ -5,6 +5,7 @@ from typing import List, Tuple
 
 from math import pi as PI
 
+from toybox_msgs.primitive.Vector_pb2 import Vector3 as VectorMsg
 from toybox_msgs.state.Position_pb2 import Position as PositionMsg
 from toybox_msgs.state.Velocity_pb2 import Velocity as VelocityMsg
 from toybox_msgs.state.Orientation_pb2 import Orientation2D as OrientationMsg
@@ -25,15 +26,22 @@ class Polygon():
         return self._points
 
 @dataclass
-class Velocity:
+class Vector3D:
     x: float = 0.0
     y: float = 0.0
     z: float = 0.0
 
-    def to_msg(self) -> VelocityMsg:
-        return VelocityMsg(x=self.x, y=self.y, z=self.z)
+    def to_msg(self) -> VectorMsg:
+        return VectorMsg(x=self.x, y=self.y, z=self.z)
+
+@dataclass
+class Velocity:
+    linear: Vector3D = field(default_factory=Vector3D)
+    angular: Vector3D = field(default_factory=Vector3D)
     
-# 2D for now
+    def to_msg(self) -> VelocityMsg:
+        return VelocityMsg(linear=self.linear.to_msg(), angular=self.angular.to_msg())
+    
 @dataclass
 class Position:
     """
@@ -46,7 +54,6 @@ class Position:
     def to_msg(self) -> PositionMsg:
         return PositionMsg(x=self.x, y=self.y, z=self.z)
 
-# 2D for now
 @dataclass
 class Orientation:
     """
@@ -67,7 +74,6 @@ class Pose:
         self,
         delta_p: Tuple[float,float,float]
     ) -> None:
-
         self.position.x = self.position.x + delta_p[0]
         self.position.y = self.position.y + delta_p[1]
         self.orientation.theta = (self.orientation.theta + delta_p[2]) % (2*PI)
@@ -79,7 +85,6 @@ class State:
 
     def __init__(self) -> None:
         pass
-
 
 def main():
     

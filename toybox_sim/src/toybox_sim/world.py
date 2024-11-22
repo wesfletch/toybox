@@ -1,33 +1,31 @@
 #!/usr/bin/env python3
 
-from dataclasses import dataclass
 import time
-from typing import Any, Callable, cast, Dict, List, Tuple, Union 
+from typing import Any, Callable, cast, Dict, List, Tuple
 
 from toybox_sim.entities import Entity
 from toybox_sim.plugins.plugins import Plugin, PLUGIN_TYPE, BaseControlPluginIF
-from toybox_sim.plugins.DiffDrivePlugin import DiffDrivePlugin
 from toybox_sim.gui import SimWindow
-import toybox_sim.file_parse
-
+from toybox_sim.primitives import Velocity, Vector3D
 
 class World:
 
     def __init__(
         self, 
-        name: str = "default",
-        entities: Dict[str,Entity] = {},
+        name: str | None = None,
+        entities: Dict[str,Entity] | None = None,
         window: SimWindow | None = None
     ) -> None:
         
-        self._name: str = name
-        self._entities: Dict[str, Entity] = entities
+        self._name: str = name if name else "default"
         self._time: float = 0.0
         self._loop_frequency: int = 60
-        
+
+        self._entities: Dict[str, Entity] = entities if entities else {}
+
         # handle GUI if present
         self._window: SimWindow | None = window
-        self._USE_GUI = True if (self._window is not None) else False
+        self._USE_GUI: bool = True if (self._window is not None) else False
         
         if self._USE_GUI and self.window is not None:
             self.window.load_visuals(self._entities)
@@ -60,9 +58,7 @@ class World:
     def window(self, window: SimWindow) -> None:
         self._window = window
         self._USE_GUI = True
-        
-        print("window_setter")
-        
+                
         for entity in self.entities:
             print(f"{entity}, {self.entities[entity].plugins}")
 
@@ -86,7 +82,6 @@ class World:
             for entity in self.entities:
                 print(f"{entity}, {self.entities[entity].plugins}")
             self.window.run()
-
         else:
             self.loop()
 
@@ -143,15 +138,23 @@ class World:
 
                     # TODO: This should probably go away...
                     if plugin.id == "DiffyDrivington":
-                        plugin.set_target_velocity(1, 3.14 / 20)
+                        plugin.set_target_velocity(Velocity(linear=Vector3D(x=1), angular=Vector3D(z=(3.14 / 20))))
                     elif plugin.id == "DiffyDrivington2":
-                        plugin.set_target_velocity(0, 3.14)
+                        plugin.set_target_velocity(Velocity(linear=Vector3D(x=0), angular=Vector3D(z=(3.14))))
 
-                    vel_target: Tuple[float,float] = plugin.get_target_velocity()
+                    vel_target: Velocity = plugin.get_target_velocity()
+                    vel_current: Velocity = entity.velocity
+                    
+                    # TODO: here is where I would stick any sort of non-ideal changes to vel, IF I HAD SOME
+                    # delta = plugin.get_velocity_change(vel_target, vel_current, anything_else_it_might_need)
+                    # entity.velocity.update(delta)
+                    entity.velocity = vel_target
+                    
                     plugin_delta = plugin.get_pose_change(
-                        velocity=vel_target, # For now, unmodified
+                        velocity=entity.velocity, # For now, unmodified
                         current_pose=entity.pose,
                         dt=dt)
+                    
 
                 elif plugin.plugin_type is PLUGIN_TYPE.INTEROCEPTIVE:
                     pass
@@ -169,15 +172,6 @@ class World:
 
         self._time += dt
 
-def main():
-    
-    sim_window: SimWindow = SimWindow()
+    def getEntity(self, entity_name: str) -> Entity | None:
 
-    worldy: World = toybox_sim.file_parse.parse_world_file("/home/wfletcher/toybox/toybox_sim/resources/base_config.json")
-    worldy.window = sim_window
-
-    worldy.run()
-
-
-if __name__ == "__main__":
-    main()
+        return self._entities.get(entity_name, None)

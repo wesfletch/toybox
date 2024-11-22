@@ -22,3 +22,6 @@ dependencies = [
 
 [project.urls]
 "Source" = "https://github.com/wesfletch/toybox"
+
+[project.scripts]
+tbx-sim = "toybox_sim.scripts.simulate:main"
