@@ -36,7 +36,7 @@ def signal_shutdown() -> None:
 
 def deinit_node(
     name: str,
-    node: Union[Node,None]
+    node: Node | None
 ) -> None:
     
     LOG("DEBUG", f"De-initializing node <{name}>")
@@ -46,6 +46,7 @@ def init_node(
     name: str,
     address: Tuple[str,int] | None = None,
     log_level: str | None = None,
+    autostart: bool = True
 ) -> Node:
     """
     Create a toybox node with the given name.
@@ -65,8 +66,12 @@ def init_node(
         host=host, 
         port=port,
         log_level=log_level,
+        autostart=autostart
     )
     
+    # TODO: FUTURE ME, STOP STARTING THE NODE THE SECOND IT'S CREATED.
+    # THAT WAS A BAD CHOICE, SO STOP MAKING IT
+
     LOG("DEBUG", f"Initialized Node <{name}> with address <{host},{port}>")
 
     # register ourselves with the master

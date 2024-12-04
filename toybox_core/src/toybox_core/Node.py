@@ -6,7 +6,7 @@ import select
 import socket
 import threading
 import time
-from typing import Dict, List, Union, Tuple, Callable, Optional
+from typing import Callable, Dict, List, Tuple
 
 import grpc
 from google.protobuf.message import Message, DecodeError
@@ -33,8 +33,9 @@ class Node():
         self,
         name: str,
         host: str = "localhost",
-        port: Optional[int] = None,
-        log_level: Optional[str] = None,
+        port: int | None = None,
+        log_level: str | None = None,
+        autostart: bool = True
     ) -> None:
 
         self._name = name
@@ -53,11 +54,11 @@ class Node():
         self._connections: Dict[socket.socket, Connection] = {}
         self._conn_lock: threading.Lock = threading.Lock()
         
-        # inbound topics
+        # inbound connections
         self._subscribers: List[Subscriber] = []
         self._subscribers_lock: threading.Lock = threading.Lock()
 
-        # outbound topics
+        # outbound connections
         self._publishers: List[Publisher] = []
         self._publishers_lock: threading.Lock = threading.Lock()
 
@@ -66,28 +67,44 @@ class Node():
         self._msg_port = get_available_port(host=self._host, start=self._port+1)
         self._msg_socket.bind((self._host, self._msg_port))
 
+        self._threads: List[threading.Thread] = []
+
         # listen for incoming connections in separate thread
         self.listen_thread: threading.Thread = threading.Thread(target=self._listen)
-        self.listen_thread.start()
+        self._threads.append(self.listen_thread)
 
         # run our spin function as a separate thread
         self.spin_thread: threading.Thread = threading.Thread(target=self._spin)
-        self.spin_thread.start()
+        self._threads.append(self.spin_thread)
 
-        self._threads: List[threading.Thread] = []
-
+        self._rpc_server: grpc.Server
         self._executor: futures.ThreadPoolExecutor = futures.ThreadPoolExecutor(
-            max_workers=10
-        )
+            max_workers=10)
         self._configure_rpc_servicer()
 
         atexit.register(self.shutdown)
 
+        if autostart:
+            self.start()
+
+    def start(self) -> None:
+
+        # non-blocking
+        self._rpc_server.start()
+
+        for thread in self._threads:
+            thread.start()
+
     def shutdown(self) -> None:
+        
+        # Signal to threads that they should stop what they're doing
         self._shutdown = True
-        # deregister_client_rpc(self._name)
+
+        for thread in self._threads:
+            thread.join()
 
     def is_shutdown(self) -> bool:
+
         return self._shutdown
 
     def _configure_rpc_servicer(self) -> None:
@@ -95,21 +112,15 @@ class Node():
         Create the RPC server that we'll use to field RPCs from other clients.
         """
 
-        self._rpc_server: grpc.server = grpc.server(
-            thread_pool=self._executor,
-        )
+        self._rpc_server = grpc.server(thread_pool=self._executor)
         add_ClientServicer_to_server(
-            servicer=ClientRPCServicer(
-                subscribers=self._subscribers, 
-            ),
+            servicer=ClientRPCServicer(subscribers=self._subscribers),
             server=self._rpc_server,
         )
 
         self._rpc_server.add_insecure_port(f'[::]:{self._port}')
 
-        # non-blocking
-        self._rpc_server.start()
-
+    # threading.Thread
     def _listen(self) -> None:
         """
         Listen for "ephemeral" connections to this Node from other Nodes.
@@ -122,17 +133,20 @@ class Node():
         self._msg_socket.settimeout(0)
 
         # listen for new connections to add to list
-        while not self._shutdown:
+        while not self.is_shutdown():
             try:
                 conn, addr = self._msg_socket.accept()
                 self.log("DEBUG", f"<{self._name}> accepted conn request from {conn.getpeername()}")
-                with self._conn_lock:                
+                # if not self._conn_lock.acquire(blocking=False):
+                #     continue
+                with self._conn_lock:
                     self._connections[conn] = Connection(
                         name="",
                         sock=conn,
                         host=addr[0],
                         port=addr[1],
                     )
+                # self._conn_lock.release()
             except BlockingIOError:
                 time.sleep(0.01)
 
@@ -154,8 +168,8 @@ class Node():
         # get available [in/out]bound sockets
         connections: List[socket.socket] = self._connections.keys() 
         ready_to_read, ready_to_write, _ = select.select(
-            connections, 
-            connections, 
+            connections,
+            connections,
             [], 0)
         self._conn_lock.release()
 
@@ -184,19 +198,21 @@ class Node():
             self._connections[conn].sock.sendall(message)
 
 
+    # threading.Thread
     def _spin(self) -> None:
         """
         Message-handling loop.
         """
         
         # service ephemeral connections
-        while not self._shutdown:
+        while not self.is_shutdown():
             
             # TODO: need this to avoid all sorts of weird messaging order issues,
             #       should probably figure out why
             time.sleep(0.01)
             
             self._spin_once()
+            print(f"aaaa {self._shutdown}")
 
 
     def _handle_message(
@@ -278,7 +294,7 @@ class Node():
         topic_name: str, 
         message_type: Message, 
         publisher_info: Tuple[str,str,int] | None,
-        callback: Union[Callable, None] = None,
+        callback: Callable | None = None,
     ) -> Subscriber:
 
         subscriber: Subscriber = Subscriber(
@@ -307,7 +323,7 @@ class Node():
             message_type (Message): The message type of the topic
 
         Returns:
-            PUblisher | None : If the topic was advertised properly, returns the Publisher, \
+            Publisher | None : If the topic was advertised properly, returns the Publisher, \
                                    otherwise returns None
         """
 
@@ -330,7 +346,7 @@ class Node():
         self,
         topic_name: str,
         message_type: Message,
-        callback_fn: Optional[Callable] = None
+        callback_fn: Callable | None = None
     ) -> bool:
     
         # request information about publishers of a specific topic
@@ -406,38 +422,3 @@ class Node():
             pubs: List[Publisher] = self._publishers
             self._publishers_lock.release()
             return pubs
-        
-    def get_connection(self, name: str, blocking: bool = False) -> Union[Connection, None]:
-        if blocking:
-            while True:
-                for conn in self._connections.values():
-                    if conn.name == name:
-                        return conn
-        else:
-            for conn in self._connections.values():
-                if conn.name == name:
-                    return conn
-        return None
-
-    def wait_for_connections(self, blocking: bool = True) -> bool:
-        """Test synchronization"""
-        if blocking:
-            while len(self._connections) == 0:
-                continue
-            return True
-        else:
-            return len(self._connections) != 0
-    
-    def wait_for_initialized(self) -> None:
-        """Test synchronization"""
-        not_initialized: List[Connection] = [x for x in self._connections.values() if not x.initialized]
-        while len(not_initialized) != 0:
-            with self._conn_lock:
-                not_initialized = [x for x in self._connections.values() if not x.initialized]
-
-    def wait_for_subscription(self, topic_name: str) -> None:
-        """Test synchronization"""
-        while self._subscriptions.get(topic_name, None) is None:
-            continue
-        while self._subscriptions.get(topic_name, None).confirmed == False:
-            continue

@@ -67,9 +67,6 @@ class Entity:
         return self._plugins
     
     def load_plugins(self, plugins: Dict[str,Plugin]) -> None:
-
-        print(f"self={self}")
-        print(f"entity.load_plugins: self.plugins={self.plugins}")
         for plugin in plugins.keys():
             self.load_plugin(plugin_id=plugin, plugin=plugins[plugin])
             print(self.plugins)
@@ -81,23 +78,14 @@ class Entity:
                 print("Plugin with ID {plugin_id} already loaded.")
         except PluginNotFoundException:
             self.plugins[plugin_id] = plugin
-            self.plugins[plugin_id].initialize(owner=self)
+            self.plugins[plugin_id].initialize(owner_id=self.id)
             return True
 
         return False
 
     def get_plugin(self, plugin_id: str) -> Plugin:
         
-        if self.plugins is None:
-            raise PluginNotFoundException(plugin_id=plugin_id, object_id=self.id)
-
-        if plugin_id not in self.plugins.keys():
+        if self.plugins is None or plugin_id not in self.plugins.keys():
             raise PluginNotFoundException(plugin_id=plugin_id, object_id=self.id)
         else:
             return self.plugins[plugin_id]
-
-def main() -> None:
-    pass
-
-if __name__ == '__main__':
-    main()

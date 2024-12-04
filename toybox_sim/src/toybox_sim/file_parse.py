@@ -4,11 +4,11 @@ import json
 from io import TextIOWrapper
 from pydoc import locate
 
-from toybox_sim.entities import Entity
+from toybox_sim.entity import Entity
 from toybox_sim.plugins.plugins import Plugin
 from toybox_sim.world import World
 
-from typing import Any, cast, Dict, List, Tuple
+from typing import Any, cast, Dict, List
 
 
 def parse_world_file(
@@ -119,6 +119,7 @@ def parse_plugin(
     plugin_type: str = plugin_json.get("type")
 
     # Use locate() to get constructor of Plugin sub-class with plugin_type.
+    # Assumes that the Plugin sub-class <PluginName> is defined in a file called <PluginName>.py
     plugin_inst: Plugin = cast(Plugin, locate(f'toybox_sim.plugins.{plugin_type}.{plugin_type}'))
     plugin: Plugin = plugin_inst.from_config(plugin_json)
 

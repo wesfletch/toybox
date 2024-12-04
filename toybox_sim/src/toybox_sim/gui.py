@@ -11,10 +11,10 @@ from pyglet.graphics.shader import Shader, ShaderProgram
 from pyglet.graphics.vertexdomain import VertexList, IndexedVertexList
 from pyglet.window import mouse, key
 
-from toybox_sim.entities import Entity
+from toybox_sim.entity import Entity
 from toybox_sim.ply_parse import parse, PlyModel, PlyElement, PlyProperty, ParseError
 
-pyglet.resource.path = ["~/toybox/toybox_sim/resources/"]
+pyglet.resource.path = ["/home/wfletcher/toybox/toybox_sim/resources/"]
 pyglet.resource.reindex()
 
 PIXELS_PER_METER: int = 40
@@ -161,7 +161,6 @@ class SimWindow(pyglet.window.Window):
         self.setup_grid()
 
     def on_show(self) -> None:
-        print("on_show")
         self.setup_grid()
 
     def on_hide(self) -> None:

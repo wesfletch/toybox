@@ -11,19 +11,6 @@ from toybox_msgs.state.Velocity_pb2 import Velocity as VelocityMsg
 from toybox_msgs.state.Orientation_pb2 import Orientation2D as OrientationMsg
 from toybox_msgs.state.Pose_pb2 import Pose2D as PoseMsg
 
-class Polygon():
-    """Simple polygon representation.
-    """
-    def __init__(self, points: List[Tuple[float, float]] = []):
-        
-        if not points:
-            self._points: List[Tuple[float, float]] = []
-        else:
-            self._points = points
-
-    @property
-    def points(self) -> List[Tuple[float,float]]:
-        return self._points
 
 @dataclass
 class Vector3D:
@@ -64,7 +51,6 @@ class Orientation:
     def to_msg(self) -> OrientationMsg:
         return OrientationMsg(theta=self.theta) 
 
-# 2D for now
 @dataclass
 class Pose:
     position: Position = field(default_factory=Position)

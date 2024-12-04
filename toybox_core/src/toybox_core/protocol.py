@@ -35,13 +35,13 @@ def read(
         TbxMessage | None: ()
     """
 
-    # attempt to receive first 2 bytes of message
+    # attempt to receive first PREFIX_LEGNTH bytes of message
     try:
         prefix_bytes: bytes = sock.recv(PREFIX_LENGTH)
     except socket.error as e:
         raise e
 
-    # unpack (L)ength -> first two bytes
+    # unpack (L)ength -> first PREFIX_LENGTH bytes
     prefix: Tuple[Any,...] = struct.unpack("HH", prefix_bytes)
     message_type_len: int = prefix[0]
     message_payload_len: int = prefix[1]
@@ -79,8 +79,9 @@ def pack_message(
     # Prepend messages with (L)ength, 2 bytes for type length, 2 bytes for data length
     # "H" == unsigned short == 2 bytes      
     type_len: bytes = struct.pack("H", len(message_type))
-    LOG(log_level="DEBUG", message=f"type length == <{type_len!r}> == <{type_len.hex()}>")
     payload_len: bytes = struct.pack("H", len(message_bytes))
+    
+    LOG(log_level="DEBUG", message=f"type length == <{type_len!r}> == <{type_len.hex()}>")
     LOG(log_level="DEBUG", message=f"payload length == <{payload_len!r}> == <{payload_len.hex()}>")
     
     # pack bytes

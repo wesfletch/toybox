@@ -2,11 +2,13 @@ syntax = "proto3";
 
 package core;
 
+import "core/Null.proto";
+
 service Topic {
 
     rpc AdvertiseTopic(AdvertiseRequest) returns (Confirmation) {}
     rpc SubscribeTopic(TopicDefinition) returns (SubscriptionResponse) {}
-
+    rpc ListTopics(Null) returns (TopicList) {}
 }
 
 message SubscriberList {
@@ -27,6 +29,10 @@ message TopicDefinition {
     string uuid = 1;
     string topic_name = 2;
     string message_type = 3;
+}
+
+message TopicList {
+    repeated TopicDefinition topics = 1;
 }
 
 message AdvertiseRequest {

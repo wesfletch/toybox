@@ -1,20 +1,19 @@
 #!/usr/bin/env python3
 
 from toybox_sim.gui import SimWindow
-import toybox_sim.file_parse
-from toybox_sim.world import World
+from toybox_sim.simulation import Simulation
+from toybox_sim.file_parse import parse_world_file
 
 
 def main():
     
-    sim_window: SimWindow = SimWindow()
-
-    worldy: World = toybox_sim.file_parse.parse_world_file(
-        "~/toybox/toybox_sim/resources/base_config.json")
-    worldy.window = sim_window
-
-    worldy.run()
-
+    sim: Simulation = Simulation(
+        name="sim",
+        window=SimWindow(),
+        world=parse_world_file(
+            "/home/wfletcher/toybox/toybox_sim/resources/base_config.json"),
+    )
+    sim.run()
 
 if __name__ == "__main__":
     main()

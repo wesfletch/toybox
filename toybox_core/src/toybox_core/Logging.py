@@ -62,8 +62,9 @@ class TbxLogger():
 
         ch: logging.StreamHandler = logging.StreamHandler(stream=sys.stdout)
         ch.setLevel(logging.DEBUG)
-        ch_fmt: logging.Formatter = logging.Formatter(fmt='[%(asctime)s.%(msecs)03d][%(name)s][%(levelname)s]: %(message)s',
-                                                    datefmt='%H:%M:%S')
+        ch_fmt: logging.Formatter = logging.Formatter(
+            fmt='[%(asctime)s.%(msecs)03d][%(name)s][%(levelname)s]: %(message)s',
+            datefmt='%H:%M:%S')
         ch.setFormatter(ch_fmt)
 
         self.logger.addHandler(ch)
