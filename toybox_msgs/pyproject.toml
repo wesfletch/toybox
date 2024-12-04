@@ -24,25 +24,3 @@ dependencies = [
 
 [project.urls]
 "Source" = "https://github.com/wesfletch/toybox"
-
-# [tool.hatch.metadata]
-# sources = [ # I don't think this actually exists
-#     {path = "src"}
-# ]
-
-[tool.hatch.build.targets.wheel]
-ignore-vcs = true
-# packages = [
-#     "src/core", 
-#     "src/primitives", 
-#     "src/state"
-# ]
-
-[tool.hatch.build.targets.sdist]
-ignore-vcs = true
-#include = [
-#    "src/*"
-#]
-#exclude = [
-#    "/build_messages"
-#]

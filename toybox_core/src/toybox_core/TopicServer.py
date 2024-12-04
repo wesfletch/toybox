@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 
-import os
-import sys
-from dataclasses import dataclass, field
-import threading
-from typing import TYPE_CHECKING, Dict, List, Tuple, Union, Callable
+from typing import Dict, List, Tuple, Union
 import uuid
 
 import concurrent.futures as futures
@@ -15,13 +11,16 @@ from toybox_msgs.core.Topic_pb2 import (
     AdvertiseRequest,
     TopicDefinition,
     Confirmation,
-    SubscriptionResponse
+    SubscriptionResponse,
+    TopicList
 )
 from toybox_msgs.core.Topic_pb2_grpc import (
     TopicServicer, 
     TopicStub,
     add_TopicServicer_to_server
 )
+from toybox_msgs.core.Null_pb2 import Null as NullMsg
+
 from toybox_core.RegisterServer import Client
 from toybox_core.Logging import LOG
 from toybox_core.Topic import Topic
@@ -131,6 +130,20 @@ class TopicRPCServicer(TopicServicer):
                     topic_port=publisher_info[1])
 
         return response
+    
+    def ListTopics(
+        self,
+        request: NullMsg,
+        context: grpc.ServicerContext,
+    ) -> TopicList:
+
+        response: TopicList = TopicList()
+
+        for topic_name in self._topics.keys():
+            topic: Topic = self._topics[topic_name]
+            response.topics.append(topic.to_msg())
+
+        return response
 
 
 class TopicServer():
@@ -195,5 +208,18 @@ def subscribe_topic_rpc(
     returned: List[Tuple[str,str,int]] = []
     for publisher in response.publisher_list:
         returned.append((publisher.publisher_id, publisher.publisher_host, publisher.topic_port))
+
+    return returned
+
+def list_topics_rpc() -> List[Topic]:
+
+    returned: List[Topic] = []
+
+    request: NullMsg = NullMsg()
+    response: TopicList = stub.ListTopics(request=request)
+    
+    for topic_def in response.topics:
+        topic: Topic = Topic(name=topic_def.topic_name, message_type=topic_def.message_type)
+        returned.append(topic)
 
     return returned

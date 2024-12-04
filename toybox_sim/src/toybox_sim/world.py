@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
 import time
-from typing import Any, Callable, cast, Dict, List, Tuple
+from typing import Dict, Tuple
 
-from toybox_sim.entities import Entity
-from toybox_sim.plugins.plugins import Plugin, PLUGIN_TYPE, BaseControlPluginIF
-from toybox_sim.gui import SimWindow
-from toybox_sim.primitives import Velocity, Vector3D
+from toybox_sim.entity import Entity
+from toybox_sim.plugins.plugins import PLUGIN_TYPE, BaseControlPluginIF
+from toybox_sim.primitives import Velocity, Vector3D, Pose
+
 
 class World:
 
@@ -14,7 +14,6 @@ class World:
         self, 
         name: str | None = None,
         entities: Dict[str,Entity] | None = None,
-        window: SimWindow | None = None
     ) -> None:
         
         self._name: str = name if name else "default"
@@ -22,13 +21,6 @@ class World:
         self._loop_frequency: int = 60
 
         self._entities: Dict[str, Entity] = entities if entities else {}
-
-        # handle GUI if present
-        self._window: SimWindow | None = window
-        self._USE_GUI: bool = True if (self._window is not None) else False
-        
-        if self._USE_GUI and self.window is not None:
-            self.window.load_visuals(self._entities)
 
     @property
     def name(self) -> str:
@@ -50,22 +42,6 @@ class World:
     def use_gui(self, use_gui: bool) -> None:
         self._USE_GUI = use_gui
 
-    @property
-    def window(self) -> SimWindow | None:
-        return self._window
-    
-    @window.setter
-    def window(self, window: SimWindow) -> None:
-        self._window = window
-        self._USE_GUI = True
-                
-        for entity in self.entities:
-            print(f"{entity}, {self.entities[entity].plugins}")
-
-        self._window.entities = self._entities
-        self._window.load_visuals(self.entities)
-        self._window.schedule_loop(self.step, frequency=self._loop_frequency)
-
     def add_entity(self, entity: Entity) -> bool:
         if entity.id in self._entities.keys():
             print(f'Entity with id <{entity.id}> already in world <{self._name}>')
@@ -74,16 +50,6 @@ class World:
             self._entities[entity.id] = entity
         
         return True
-
-    def run(self) -> None:
-
-        # if we're using GUI, let pyglet handle the loop
-        if self._USE_GUI and self.window is not None:
-            for entity in self.entities:
-                print(f"{entity}, {self.entities[entity].plugins}")
-            self.window.run()
-        else:
-            self.loop()
 
     def loop(
         self, 
@@ -103,7 +69,7 @@ class World:
             time_delta: float = time.time() - start_time
             if time_delta < loop_period:
                 time.sleep(loop_period - time_delta)
-            start_time = time.time() 
+            start_time = time.time()
 
     def step(
         self, 
@@ -155,7 +121,6 @@ class World:
                         current_pose=entity.pose,
                         dt=dt)
                     
-
                 elif plugin.plugin_type is PLUGIN_TYPE.INTEROCEPTIVE:
                     pass
                 elif plugin.plugin_type is PLUGIN_TYPE.EXTEROCEPTIVE:
@@ -171,7 +136,3 @@ class World:
             entity.pose.update(delta_p=position_delta)
 
         self._time += dt
-
-    def getEntity(self, entity_name: str) -> Entity | None:
-
-        return self._entities.get(entity_name, None)

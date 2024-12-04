@@ -8,8 +8,8 @@ import uuid
 from typing import TYPE_CHECKING
 
 from toybox_sim.primitives import Pose, Velocity
-if TYPE_CHECKING:
-    from toybox_sim.entities import Entity
+from toybox_sim.context import PluginContext
+
 
 class PluginNotFoundException(Exception):
     """Exception raised when a plugin cannot be found. 
@@ -35,16 +35,30 @@ class Plugin(ABC):
     def __init__(
         self,
         id: str | None = None,
+        owner_id: str | None = None,
+        context: PluginContext | None = None,
     ) -> None:
-        
-        if not id:
-            self._id = str(uuid.uuid4())
-        else:
-            self._id = id
-    
+
+        self._id: str = id if (id is not None) else str(uuid.uuid4())
+        self._owner_id: str | None = owner_id
+
+        self._context: PluginContext | None = context
+
     @property
     def id(self) -> str:
         return self._id
+
+    @property
+    def owner_id(self) -> str | None:
+        return self._owner_id
+
+    @property
+    def context(self) -> PluginContext | None:
+        return self._context
+    
+    @context.setter
+    def context(self, context: PluginContext) -> None:
+        self._context = context
 
     @property
     @abstractmethod
@@ -52,7 +66,7 @@ class Plugin(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def initialize(self, owner: 'Entity') -> None:
+    def initialize(self, owner_id: str) -> None:
         raise NotImplementedError
 
     @classmethod

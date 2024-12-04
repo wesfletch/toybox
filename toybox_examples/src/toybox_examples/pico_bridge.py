@@ -2,7 +2,7 @@
 
 import threading
 import time
-from typing import Union, List, Optional
+from typing import List, Optional
 
 from toybox_core.Connection import Subscriber
 
@@ -58,19 +58,18 @@ class Listener(Launchable):
         self._name = name
         self._node: Node = tbx.init_node(
             name=self._name,
-            log_level="DEBUG"
-        )    
+            log_level="DEBUG")
+
+    def callback(self, message: TestMessage) -> None:
+        print(message)
+
+    def pre_launch(self) -> bool:
 
         self._subscribed: bool = self._node.subscribe(
             topic_name="/test",
             message_type=TestMessage,
             callback_fn=self.callback
         )
-
-    def callback(self, message: TestMessage) -> None:
-        print(message)
-
-    def pre_launch(self) -> bool:
         if not self._subscribed:
             return False
         
@@ -81,6 +80,9 @@ class Listener(Launchable):
     
     def post_launch(self) -> bool:
         return True
+    
+    def shutdown(self) -> None:
+        self.node.shutdown()
 
 def main() -> None:
 

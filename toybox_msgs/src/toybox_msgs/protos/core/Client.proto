@@ -3,14 +3,13 @@ syntax = "proto3";
 package core;
 
 import "core/Topic.proto";
+import "core/Null.proto";
 
 service Client {
 
     rpc InformOfPublisher(TopicDefinition) returns (InformConfirmation) {}
     rpc InformOfShutdown(Null) returns (Null) {}
 }
-
-message Null {}
 
 message InformConfirmation {
     int32 return_code = 1;

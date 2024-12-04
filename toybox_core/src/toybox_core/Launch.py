@@ -35,6 +35,9 @@ class Launchable(ABC):
         """
         return True
 
+    def shutdown(self) -> None:
+        raise NotImplementedError
+
     @property
     def node(self) -> Node:
         if hasattr(self, "_node"):
@@ -66,16 +69,20 @@ def launch(to_launch: Launchable) -> bool:
     logger.LOG("DEBUG", f"Pre-launch for <{to_launch.node}>")
     pre_result: bool = to_launch.pre_launch()
     if not pre_result:
+        logger.LOG("DEBUG", f"Pre-launch for <{to_launch.node}> FAILED.")
+        to_launch.node.shutdown()
         return False
     
     logger.LOG("DEBUG", f"Launch for <{to_launch.node}>")
     launch_result: bool = to_launch.launch()
     if not launch_result:
+        to_launch.node.shutdown()
         return False
     
     logger.LOG("DEBUG", f"Post-launch <{to_launch.node}>")
     post_result: bool = to_launch.post_launch()
     if not post_result:
+        to_launch.node.shutdown()
         return False
     
     logger.LOG("DEBUG", f"Calling shutdown on <{to_launch.node}>")

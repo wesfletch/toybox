@@ -1,22 +1,13 @@
 #!/usr/bin/env python3
 
 import grpc
-from typing import Dict, List, Union, Tuple, Callable
+from typing import List
 
-from toybox_core.TopicServer import (
-    Topic,
-)
-from toybox_core.Connection import (
-    Subscriber
-)
+from toybox_core.Connection import Subscriber
 
 import toybox_msgs.core.Client_pb2 as Client_pb2
-from toybox_msgs.core.Client_pb2_grpc import (
-    ClientServicer,
-)
-from toybox_msgs.core.Topic_pb2 import (
-    TopicDefinition,
-)
+from toybox_msgs.core.Client_pb2_grpc import ClientServicer
+from toybox_msgs.core.Topic_pb2 import TopicDefinition
 
 class ClientRPCServicer(ClientServicer):
 
@@ -38,7 +29,7 @@ class ClientRPCServicer(ClientServicer):
         message_type: str = request.message_type
 
         # look to see if we have a subscriber that cares about this topic
-        subscription: Union[Subscriber,None] = None
+        subscription: Subscriber | None = None
         for sub in self._subscribers:
             if sub.topic.name == topic:
                 subscription = sub

@@ -2,14 +2,12 @@
 
 import math
 import time
-from typing import Dict, Tuple 
+from typing import Dict, Tuple, TYPE_CHECKING
 
 import toybox_core as tbx
 
 from toybox_sim.plugins.plugins import Plugin, BaseControlPluginIF, PLUGIN_TYPE
-from toybox_sim.entities import Entity
 from toybox_sim.primitives import Pose, Velocity
-from toybox_sim.world import World
 
 from toybox_msgs.core.Test_pb2 import TestMessage
 from toybox_msgs.state.Velocity_pb2 import Velocity as VelocityMsg
@@ -22,15 +20,13 @@ class DiffDrivePlugin(Plugin, BaseControlPluginIF):
 
     def __init__(
         self,
-        id: str = "",
-        json_config: Dict[str,str] = {}
+        id: str | None = None,
+        owner_id: str | None = None,
+        json_config: Dict[str,str] | None = None
     ) -> None:
         
-        Plugin.__init__(self, id=id)
+        Plugin.__init__(self, id=id, owner_id=owner_id)
         BaseControlPluginIF.__init__(self)
-        
-        self._owner: Entity
-        self._id: str = id
         
         # wheel constants
         self._wheel_base = 0.1
@@ -46,7 +42,7 @@ class DiffDrivePlugin(Plugin, BaseControlPluginIF):
         self._time_last_target: float = -1.0
 
         # override defaults if config file provided
-        if json_config.keys() is not None:
+        if json_config is not None:
             self.parse_config(json_config)
     
     @property
@@ -58,7 +54,7 @@ class DiffDrivePlugin(Plugin, BaseControlPluginIF):
         cls,
         json_config: Dict[str,str]
     ) -> Plugin:
-        return DiffDrivePlugin(id="", json_config=json_config)
+        return DiffDrivePlugin(json_config=json_config)
 
     def parse_config(
         self,
@@ -101,31 +97,32 @@ class DiffDrivePlugin(Plugin, BaseControlPluginIF):
                     self._vel_target_timeout = vel_target_timeout
                     # self._use_target_timeout = True
                 case _:
-                    print(f"Unsupported key ignored: <{key}>")
+                    print(f"Unhandled key ignored: <{key}> == <{value}>")
 
     def initialize(
         self,
-        owner: 'Entity'
+        # owner: 'Entity'
+        owner_id: str
     ) -> None:
         """_summary_
 
         Args:
             owner (Entity): _description_
         """
-        self._owner = owner
-        print(f'Plugin <{self._id}> initialized for Entity <{self._owner.id}>')
+        # self._owner = owner
+        self._owner_id = owner_id
+        print(f'Plugin <{self._id}> initialized for Entity <{self.owner_id}>')
 
         # TBX config
         self._node: tbx.Node = tbx.init_node(
-            name=f"{self._owner.id}/{self._id}",
+            name=f"{self.owner_id}/{self.id}",
             log_level="DEBUG")
         
+        vel_pub_topic: str = f"/{self.owner_id}/{self.id}/velocity"
+        self._node.log("DEBUG", f"Publishing velocity on: {vel_pub_topic}")
         self._vel_pub: tbx.Publisher = self._node.advertise(
-            topic_name=f"/{self.id}/velocity",
+            topic_name=vel_pub_topic,
             message_type=VelocityMsg)
-        self._test_pub: tbx.Publisher = self._node.advertise(
-            topic_name=f"/{self.id}/test",
-            message_type=TestMessage)
 
     def call(
         self, 
@@ -137,6 +134,9 @@ class DiffDrivePlugin(Plugin, BaseControlPluginIF):
         Args:
             dt (float, optional): Timestep. Defaults to 0.02.
         """
+
+        assert self.context is not None, "Context not attached"
+
         call_time: float = time.time()
 
         if self._time_last_call < 0:
@@ -148,7 +148,10 @@ class DiffDrivePlugin(Plugin, BaseControlPluginIF):
                 self.set_target_velocity(Velocity())
 
         self._time_last_call = call_time
-        self._vel_pub.publish(VelocityMsg(x=0.1, y=1.1, z=2.2))
+
+        current_vel: Velocity | None = self.context.get_entity_velocity(self._owner_id)
+        if current_vel is not None:
+            self._vel_pub.publish(current_vel.to_msg())
 
     def set_target_velocity(
         self,
