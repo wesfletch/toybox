@@ -6,7 +6,7 @@ import sys
 from typing import Dict
 
 logger: logging.Logger = logging.getLogger("tbx")
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 ch: logging.StreamHandler = logging.StreamHandler(stream=sys.stdout)
 ch.setLevel(logging.DEBUG)
@@ -43,6 +43,12 @@ def LOG(
 
     logger.log(log_levels[log_level], message)
 
+def set_log_level(
+    log_level: str
+) -> None:
+    if log_level not in log_levels.keys():
+        raise Exception(f"Invalid log level <{log_level}>")
+    logger.setLevel(log_levels[log_level])
 
 # Rather than sub-classing logging.Logger like I should...
 class TbxLogger():
