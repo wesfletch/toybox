@@ -118,7 +118,11 @@ class Node():
 
     def shutdown(self, requested_by_server: bool = False) -> None:
 
-        self.log("INFO", f"Shutting down. requested_by_server={requested_by_server}.")
+        # Idempotence
+        if self._shutdown:
+            return
+
+        self.log("INFO", f"Shutting down {self._name}. requested_by_server={requested_by_server}.")
 
         if requested_by_server:
             # If the server requests that we shut down, we assume that we don't
@@ -161,7 +165,10 @@ class Node():
         self._rpc_server.add_insecure_port(f'[::]:{self._port}')
 
     def _register(self) -> bool:
-
+        """
+        Attempt to register this Node with the TBX server.
+        """
+        
         if self._registered:
             # Don't re-register.
             return True
@@ -190,7 +197,7 @@ class Node():
         
         result: bool = deregister_client_rpc(name=self._name)
         if not result:
-            self.log("ERROR", f"Failed to de-register node <'{self._name}'>")
+            self.log("ERR", f"Failed to de-register node <'{self._name}'>")
         self._registered = False
 
     # threading.Thread
@@ -347,13 +354,14 @@ class Node():
     ) -> Publisher:
 
         # create a publisher, 
-        # REMEMBER: PUblishers don't connect().
+        # REMEMBER: Publishers don't connect().
         publisher: Publisher = Publisher(
             topic_name=topic_name,
             message_type=message_type,
             host=self._host,
             port=get_available_port(host=self._host, start=self._msg_port),
-            logger=self._logger
+            logger=self._logger,
+            shutdown_event=self.shutdown_event
         )
 
         return publisher
@@ -398,10 +406,8 @@ class Node():
 
         pub: Publisher = self._configure_publisher(
             topic_name=topic_name,
-            message_type=message_type,
-        )
-        # TODO: see body of _configure_publisher, this doesn't make any sense. 
-        # Why am I appending to 
+            message_type=message_type)
+
         if not pub.advertise(advertiser_id=self._name):
             self.log("ERR", f"Failed to advertise topic <{topic_name}>")
             return None
@@ -422,6 +428,7 @@ class Node():
         self.log("DEBUG", f"Node <{self._name}> requesting topic info from tbx-server")
         try:
             publishers: List[Tuple[str, int]] = subscribe_topic_rpc(
+                subscriber_id=self._name,
                 topic_name=topic_name,
                 message_type=message_type.DESCRIPTOR.full_name)
         except grpc.RpcError as rpc_error:

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from dataclasses import dataclass
-from typing import Dict, List, Union
+from typing import Callable, Dict, List, Union
 
 import grpc
 import concurrent.futures as futures
@@ -12,6 +12,7 @@ from toybox_core.Topic import Topic
 import toybox_msgs.core.Register_pb2 as Register_pb2
 import toybox_msgs.core.Register_pb2_grpc as Register_pb2_grpc
 import toybox_msgs.core.Null_pb2 as Null_pb2
+import toybox_msgs.core.Client_pb2_grpc as Client_pb2_grpc
 
 
 @dataclass
@@ -21,6 +22,18 @@ class Client():
     rpc_port: int
     data_port: int
 
+    channel: grpc.Channel | None = None
+    stub: Client_pb2_grpc.ClientStub | None = None
+
+    def get_channel(self) -> grpc.Channel:
+        if self.channel is None:
+            self.channel = grpc.insecure_channel(f'{self.addr}:{self.rpc_port}')
+        return self.channel
+    
+    def get_stub(self) -> Client_pb2_grpc.ClientStub:
+        if self.stub is None:
+            self.stub = Client_pb2_grpc.ClientStub(channel=self.get_channel())
+        return self.stub
 
 class RegisterServicer(Register_pb2_grpc.RegisterServicer):
 
@@ -28,20 +41,27 @@ class RegisterServicer(Register_pb2_grpc.RegisterServicer):
         self, 
         clients: Dict[str,Client],
         topics: Dict[str,Topic],
+        deregister_callback: Callable[[str], bool] | None = None
     ) -> None:
         self._clients: Dict[str,Client] = clients
         self._topics: Dict[str,Topic] = topics
+
+        self._deregister_callback: Callable[[str], bool] | None 
+        self._deregister_callback = deregister_callback
 
     def RegisterClient(
         self, 
         request: Register_pb2.RegisterRequest, 
         context: grpc.ServicerContext
     ) -> Register_pb2.RegisterResponse:
+        """
+        RPC called by clients that wish to register with the TBX server.
+        """
 
         client_id: str = request.client_id
         meta: Register_pb2.ClientMetadata = request.meta
 
-        # we don't allow name collisions
+        # We don't allow name collisions, client IDs MUST be unique
         if self._clients.get(client_id) is not None:
             LOG("INFO", f"Refused to register client with name <{client_id}>. Client with that ID already exists.")
             return Register_pb2.RegisterResponse(
@@ -64,24 +84,26 @@ class RegisterServicer(Register_pb2_grpc.RegisterServicer):
         request: Register_pb2.DeRegisterRequest, 
         context: grpc.ServicerContext,
     ) -> Register_pb2.RegisterResponse:
-
+        """
+        RPC called by clients that wish to DE-register with the TBX server.
+        """
         client_id: str = request.client_id
 
         if self._clients.get(client_id) is None:
             return Register_pb2.RegisterResponse(
                 return_code=1,
-                status=f'No client with ID <{client_id}> registered.'
-            )
+                status=f'No client with ID <{client_id}> registered.')
         
-        # when a client de-registers, we also want to de-register all of
-        # it's advertised topics
-        for topic in self._topics.values():
-            if topic.publishers.get(client_id, None) is not None:
-                del topic.publishers[client_id]
-        
-        del self._clients[client_id]
+        if self._deregister_callback is None:
+            del self._clients[client_id]
+            LOG("INFO", f"De-registered client <{client_id}>.")
+            return Register_pb2.RegisterResponse(return_code=0)
 
-        LOG("INFO", f"De-registered client <{client_id}>.")
+        result: bool = self._deregister_callback(client_id)
+        if not result:
+            return Register_pb2.RegisterResponse(return_code=1, status="De-register callback failed.")
+
+        LOG("INFO", f"De-registered client <{client_id}> with de-register callback.")
         return Register_pb2.RegisterResponse(return_code=0)
     
     def GetClientInfo(
@@ -89,6 +111,9 @@ class RegisterServicer(Register_pb2_grpc.RegisterServicer):
         request: Register_pb2.Client_ID, 
         context: grpc.ServicerContext,
     ) -> Register_pb2.ClientResponse:
+        """
+        RPC call for getting information about a specific TBX client.
+        """
 
         client_id: str = request.client_id
 
@@ -121,7 +146,10 @@ class RegisterServicer(Register_pb2_grpc.RegisterServicer):
         request: Null_pb2.Null, 
         context: grpc.ServicerContext
     ) -> Register_pb2.ClientList:
-        
+        """
+        RPC call for getting a list of ALL registered TBX clients.
+        """
+
         client_list: Register_pb2.ClientList = Register_pb2.ClientList()
 
         for _, client in self._clients.items():
@@ -171,21 +199,25 @@ def register_client_rpc(
     port: int,
     data_port: int = -1
 ) -> bool:
-    
+
     # build our request
-    client_req: Register_pb2.RegisterRequest = Register_pb2.RegisterRequest(
-        client_id=name,
-        meta=Register_pb2.ClientMetadata(addr=host, port=port, data_port=data_port)
-    )
-    result: Register_pb2.RegisterResponse
+    client_req: Register_pb2.RegisterRequest = Register_pb2.RegisterRequest()
+    client_req.client_id = name
+    client_req.meta.addr = host
+    client_req.meta.port = port
+    client_req.meta.data_port = data_port
+    print(client_req)
+
     try:
-        result = register_stub.RegisterClient(request=client_req)
-        if result.return_code != 0:
-            LOG("ERR", f"RPC failed: {result.status}")
-        return (result.return_code == 0)
+        result: Register_pb2.RegisterResponse = register_stub.RegisterClient(request=client_req)
     except grpc.RpcError as e:
         LOG('ERR', f'Calling RegisterClient RPC failed: {e}')
         return False
+    
+    if result.return_code != 0:
+        LOG("ERR", f"RPC failed: {result.status}")
+    
+    return (result.return_code == 0)
 
 def deregister_client_rpc(
     name: str,
@@ -198,7 +230,8 @@ def deregister_client_rpc(
     try:
         result = register_stub.DeRegisterClient(request=req)
         LOG("DEBUG", f"De-registering client <{name}> returned <{result.return_code == 0}>.")
-    except grpc.RpcError:
+    except grpc.RpcError as e:
+        LOG("ERR", f"Failed to de-register client {name}: {e}")
         return False
     
     return (result.return_code == 0)
@@ -211,7 +244,6 @@ def get_client_info_rpc(
         client_id=client_name
     )
     result: Register_pb2.ClientResponse = register_stub.GetClientInfo(request=client_req)
-    # print(result)
 
     return result.client
 

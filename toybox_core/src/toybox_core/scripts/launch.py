@@ -6,7 +6,10 @@ from toybox_core.Launch import launch_all, Launchable, get_launch_description, L
 from toybox_core.Logging import LOG
 
 def main() -> None:
-
+    # TODO: for now, this is just an example of using LaunchDescriptions
+    # and the launch_all() func the way I would in a to-be-developed *.launch.py file. 
+    # This specific script will eventually be a CLI tool for launching nodes.
+    
     listener: LaunchDescription = get_launch_description("Listener")
     listener.set_params({
         "name": "listener",

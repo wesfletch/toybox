@@ -7,17 +7,21 @@ import concurrent.futures as futures
 import grpc
 from google.protobuf.message import Message
 
+from toybox_msgs.core.Client_pb2_grpc import ClientStub
+from toybox_msgs.core.Client_pb2 import (
+    InformConfirmation,
+    TopicPublisherInfo
+)
 from toybox_msgs.core.Topic_pb2 import (
     AdvertiseRequest,
-    TopicDefinition,
     Confirmation,
+    SubscriptionRequest,
     SubscriptionResponse,
     TopicList
 )
 from toybox_msgs.core.Topic_pb2_grpc import (
     TopicServicer, 
     TopicStub,
-    add_TopicServicer_to_server
 )
 from toybox_msgs.core.Null_pb2 import Null as NullMsg
 
@@ -45,9 +49,10 @@ class TopicRPCServicer(TopicServicer):
         IN: AdvertiseRequest
         OUT: Confirmation
         """
-        advertiser_id: str = request.client_id
-        advertiser_host: str = request.host
-        advertiser_port: int = request.topic_port
+        print("ADVERTISE START")
+        advertiser_id: str = request.publisher.publisher_id
+        advertiser_host: str = request.publisher.publisher_host
+        advertiser_port: int = request.publisher.topic_port
         topic_name: str = request.topic_def.topic_name
         message_type: str = request.topic_def.message_type
 
@@ -58,38 +63,61 @@ class TopicRPCServicer(TopicServicer):
 
         # Check if this topic already exists
         topic: Topic | None = self._topics.get(topic_name, None)
-        if topic is not None:
-            # The topic already exists, meaning it's either been advertised by a Publisher,
-            # or been subscribed to by a Subscriber.
-            
-            # TODO: I think I'd rather not allow two topics to share a name at all. But we'll see...
-            # Don't allow a publisher to re-declare a topic it's already declared.
-            if advertiser_id in topic.publishers.keys():
-                conf.return_code = 1
-                conf.status = f"multiple advertise for topic <{topic_name}> by publisher <{advertiser_id}>"
-            # Don't allow two topics to share a name, but not a type
-            elif topic.message_type != message_type:
-                conf.return_code = 2
-                conf.status = f"declared message type <{message_type}> \
-                    doesn't match previously advertised <{topic.message_type}"
-            else:
-                topic.publishers[advertiser_id] = (advertiser_host, advertiser_port)
-                conf.status = f"Topic <{topic_name}> advertised successfully."
-                print(topic.publishers)
-                print('-----------------------------')
-                print(topic.subscribers)
-                print('-----------------------------')
-                print(self._clients)
-                # print(f"AAAAAAAAAAAAAAAAAAAAAAAAAAA {[self._clients[x] for x in topic.subscribers]}")
-
-        else:
-
+        if topic is None:
+            # Topic doesn't exist yet, so all we need to do is create a new Topic object
+            # to represent it.
             self._topics[topic_name] = Topic(
                 name=topic_name,
                 message_type=message_type,
                 publishers={advertiser_id: (advertiser_host, advertiser_port)})
             conf.status = f"Topic <{topic_name}> from client <{advertiser_id}> advertised successfully."
+            return conf
         
+        # The topic already exists, meaning it's been advertised by a Publisher
+        # and/or been subscribed to by a Subscriber.
+        
+        # TODO: I think I'd rather not allow two topics to share a name at all. But we'll see...
+        if advertiser_id in topic.publishers.keys():
+            # Don't allow a publisher to re-declare a topic it's already declared.
+            conf.return_code = 1
+            conf.status = f"multiple advertise for topic <{topic_name}> by publisher <{advertiser_id}>"
+            return conf
+        elif topic.message_type != message_type:
+            # Don't allow two topics to share a name, but not a type
+            conf.return_code = 2
+            conf.status = f"declared message type <{message_type}> \
+                doesn't match previously advertised <{topic.message_type}"
+            return conf
+        
+        # If we've gotten to this point, the topic DOES exist already, and the topic definition
+        # we were given by the RPC matches it. We're clear to add this new publisher.
+        topic.publishers[advertiser_id] = (advertiser_host, advertiser_port)
+        conf.status = f"Topic <{topic_name}> advertised successfully."
+           
+        # Finally, we need to make sure that any subscribers that were subscribed to this topic BEFORE
+        # this publisher advertised it are informed that there's a new publisher.
+        for subscriber_name in topic.subscribers:
+            # Special case: a node advertises a topic that it's also subscribed to.
+            # TODO: For now, skip it. May need to actually handle this in the future.
+            if subscriber_name == advertiser_id:
+                continue
+
+            subscriber: Client | None = self._clients.get(subscriber_name, None)
+            assert subscriber is not None
+
+            # TODO: I'm calling an RPC from the body of another RPC. What are the 
+            # ramifications of that?
+            stub: ClientStub = subscriber.get_stub()
+
+            topic_pub: TopicPublisherInfo = TopicPublisherInfo()
+            topic_pub.topic_def.CopyFrom(request.topic_def)
+            topic_pub.publisher.CopyFrom(request.publisher)
+            inform_conf: InformConfirmation = stub.InformOfPublisher(topic_pub, timeout=1.0)
+
+            if inform_conf.return_code != 0:
+                conf.status = "Failed to inform subscribers of new publisher."
+                conf.status = 1
+
         return conf
     
     def DeAdvertiseTopic(self, request, context) -> Confirmation:
@@ -97,28 +125,19 @@ class TopicRPCServicer(TopicServicer):
     
     def SubscribeTopic(
         self, 
-        request: TopicDefinition, 
+        request: SubscriptionRequest, 
         context: grpc.ServicerContext,
     ) -> SubscriptionResponse:
-        """
-        _summary_
 
-        Args:
-            request (TopicDefinition): _description_
-            context (_type_): _description_
 
-        Returns:
-            Confirmation: _description_
-        """
-        uuid: str = request.uuid
-        topic_name: str = request.topic_name
-        message_type: str = request.message_type
+        subscriber_id: str = request.subscriber_id
+        topic_name: str = request.topic_def.topic_name
+        message_type: str = request.topic_def.message_type
 
         # build our response
         response: SubscriptionResponse = SubscriptionResponse()
-        response.conf.uuid = uuid
         response.conf.return_code = 0
-        response.topic_def.CopyFrom(request)
+        response.topic_def.CopyFrom(request.topic_def)
 
         topic: Topic | None = self._topics.get(topic_name, None) 
         if topic is None:
@@ -127,18 +146,13 @@ class TopicRPCServicer(TopicServicer):
             self._topics[topic_name] = Topic(
                 name=topic_name,
                 message_type=message_type,
-                subscribers=[uuid])
+                subscribers=[subscriber_id])
         else:
-            topic.subscribers.append(uuid)
+            topic.subscribers.append(subscriber_id)
 
-            for publisher in topic.publishers.keys():
-                
-                publisher_info: Union[Tuple[str,int],None] = topic.publishers.get(publisher, None)
-                if publisher_info is None:
-                    raise Exception("something's wrong here") 
-                
+            for publisher_id, publisher_info in topic.publishers.items():
                 response.publisher_list.add(
-                    publisher_id=publisher,
+                    publisher_id=publisher_id,
                     publisher_host=publisher_info[0],
                     topic_port=publisher_info[1])
 
@@ -159,30 +173,6 @@ class TopicRPCServicer(TopicServicer):
         return response
 
 
-class TopicServer():
-
-    def __init__(self) -> None:
-
-        self._topics: Dict[str, Topic] = {}
-        self._servicer: TopicRPCServicer = TopicRPCServicer(topics=self._topics)
-
-        self.not_started: bool = True
-
-    def serve(self) -> None:
-        
-        self._server: grpc.Server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-        add_TopicServicer_to_server(
-            self._servicer, 
-            self._server
-        )
-
-        self._server.add_insecure_port('[::]:50051')
-        
-        self._server.start()
-        self.not_started = False
-
-
-
 channel: grpc.insecure_channel = grpc.insecure_channel('[::]:50051')
 stub: TopicStub = TopicStub(channel=channel)
 
@@ -195,26 +185,27 @@ def advertise_topic_rpc(
 ) -> bool:
 
     advertise_req: AdvertiseRequest = AdvertiseRequest()
-    advertise_req.client_id = client_name
-    advertise_req.host = client_host
-    advertise_req.topic_port = topic_port
-    advertise_req.topic_def.uuid = str(uuid.uuid4())
+    advertise_req.publisher.publisher_id = client_name
+    advertise_req.publisher.publisher_host = client_host
+    advertise_req.publisher.topic_port = topic_port
     advertise_req.topic_def.topic_name = topic_name
     advertise_req.topic_def.message_type = message_type.DESCRIPTOR.full_name
 
     conf: Confirmation = stub.AdvertiseTopic(request=advertise_req)
     return (conf.return_code == 0)
 
+
 def subscribe_topic_rpc(
+    subscriber_id: str,
     topic_name: str,
     message_type: str,
 ) -> List[Tuple[str,str,int]]:
 
-    subscribe_req: TopicDefinition = TopicDefinition(
-        uuid=str(uuid.uuid4()),
-        topic_name=topic_name,
-        message_type=message_type,
-    )
+    subscribe_req: SubscriptionRequest = SubscriptionRequest()
+    subscribe_req.subscriber_id = subscriber_id
+    subscribe_req.topic_def.topic_name = topic_name
+    subscribe_req.topic_def.message_type = message_type
+
     response: SubscriptionResponse = stub.SubscribeTopic(request=subscribe_req)
 
     returned: List[Tuple[str,str,int]] = []
@@ -222,6 +213,7 @@ def subscribe_topic_rpc(
         returned.append((publisher.publisher_id, publisher.publisher_host, publisher.topic_port))
 
     return returned
+
 
 def list_topics_rpc() -> List[Topic]:
 
