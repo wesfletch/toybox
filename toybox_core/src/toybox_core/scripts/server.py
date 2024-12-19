@@ -3,7 +3,9 @@
 import atexit
 import signal
 import sys
-from typing import Dict
+import threading
+import time
+from typing import Dict, List
 
 import grpc
 import concurrent.futures as futures
@@ -30,7 +32,7 @@ from toybox_msgs.core.Topic_pb2_grpc import (
 
 class ToyboxServer():
 
-    def __init__(self):
+    def __init__(self) -> None:
         
         self._topics: Dict[str,Topic] = {}
         self._clients: Dict[str,Client] = {}
@@ -41,7 +43,8 @@ class ToyboxServer():
         )
         self._register_servicer: RegisterServicer = RegisterServicer(
             clients=self._clients,
-            topics=self._topics
+            topics=self._topics,
+            deregister_callback=self.deregister_client
         )
 
         self._server: grpc.Server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
@@ -54,40 +57,82 @@ class ToyboxServer():
             self._server
         )
 
-        self._server.add_insecure_port('[::]:50051')
+        rpc_port: int =  self._server.add_insecure_port('[::]:50051')
         
-        LOG("INFO", f"Server configured for {str(self._server)}")
+        LOG("INFO", f"Server configured for {str(self._server)} on port {rpc_port}")
         
         atexit.register(self.shutdown)
         signal.signal(signal.SIGINT, self.ctrl_c_handler)
 
+        self._shutdown_event: threading.Event = threading.Event()
+
     def serve(self) -> None:
+
         self._server.start()
         self._server.wait_for_termination()
+
 
     def shutdown(self) -> None:
         """
         Send the shutdown signal to any registered clients.
         """
+        print("SHUTDOWN GOT CALLED")
 
-        channel: grpc.insecure_channel
-        client_stub: Client_pb2_grpc.ClientStub
-        
+        if self._shutdown_event.is_set():
+            return
+
         for name, client in self._clients.items():
-            LOG("INFO", f"Sent shutdown request to {name} at {client.addr}:{client.rpc_port}")
-            channel = grpc.insecure_channel(f'{client.addr}:{client.rpc_port}')
-            client_stub = Client_pb2_grpc.ClientStub(channel=channel)
+            client_stub = client.get_stub()
             
             # Actually send the Shutdown() request to the client,
-            # but use a timeout because we don't actually care about their response.
+            # but use a timeout because we don't care about their response.
             shutdown_req: Null = Null()
-            client_stub.InformOfShutdown(request=shutdown_req, timeout=1.0)
+            try:
+                client_stub.InformOfShutdown(request=shutdown_req, timeout=0.25)
+            except grpc.RpcError as e:
+                if e == grpc.StatusCode.DEADLINE_EXCEEDED:
+                    # We don't care...
+                    continue
+
+            LOG("INFO", f"Sent shutdown request to {name} at {client.addr}:{client.rpc_port}")
+
+        self._shutdown_event.set()
 
     def ctrl_c_handler(self, signum, frame) -> None:
         self.shutdown()
         sys.exit(0)
 
-def main():
+    def deregister_client(self, client_name: str) -> bool:
+        """
+        Callback for deregistering clients; handles removing the client itself,
+        as well as cleaning out any topics, ..., etc. that may be attached to it.
+        """
+
+        # Get rid of the client...
+        del self._clients[client_name]
+
+        # A topic with no publishers and no subscribers is an orphan,
+        # and orphans have got to go.
+        orphans: List[str] = []
+
+        # And make sure that any topics that it was subscribed to/advertising go away as well.
+        for topic_name, topic in self._topics.items():
+            if topic.publishers.get(client_name, None) is not None:
+                del topic.publishers[client_name]
+            if client_name in topic.subscribers:
+                topic.subscribers.remove(client_name)
+
+            # Is this an orphan? Put its name in the death note.
+            if len(topic.publishers) == 0 and len(topic.subscribers) == 0:
+                orphans.append(topic_name)
+        
+        # Get rid of any orphans.
+        for orphan in orphans:
+            del self._topics[orphan]
+
+        return True
+
+def main() -> None:
 
     tbx: ToyboxServer = ToyboxServer()
     tbx.serve()

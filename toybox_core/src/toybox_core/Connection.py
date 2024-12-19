@@ -92,7 +92,8 @@ class Publisher(Connection):
         message_type: Message, 
         host: str,
         port: int,
-        logger: TbxLogger | None = None
+        logger: TbxLogger | None = None,
+        shutdown_event: threading.Event | None = None
     ) -> None:
 
         Connection.__init__(
@@ -110,14 +111,16 @@ class Publisher(Connection):
 
         self._subscribers: List[Connection] = []
 
+        # TODO: should consolidate this and is_shutdown into a single property,
+        # like I did in Node
+        self._shutdown_event: threading.Event = shutdown_event
+
         self._listen_thread: threading.Thread = threading.Thread(target=self.listen)
-        self._listen_shutdown: threading.Event = threading.Event()
-        self._listen_thread.name = f"{topic_name.replace('/','_')}_publisher_listen"
+        self._listen_thread.name = f"{self.name}_{topic_name.replace('/','_')}_publisher_listen"
         self._listen_thread.start()
 
         self._spin_thread: threading.Thread = threading.Thread(target=self.spin)
-        self._spin_shutdown: threading.Event = threading.Event()
-        self._spin_thread.name = f"{topic_name.replace('/','_')}_publisher_spin"
+        self._spin_thread.name = f"{self.name}_{topic_name.replace('/','_')}_publisher_spin"
         self._spin_thread.start()
 
     # threading.Thread
@@ -128,7 +131,7 @@ class Publisher(Connection):
         # make socket non-blocking
         self.sock.settimeout(0)
 
-        while not self.is_shutdown:
+        while not self._shutdown_event.is_set():
             try:
                 conn, addr = self.sock.accept()
                 self.log("DEBUG", f"<{self.name}> accepted conn request from {conn.getpeername()}")
@@ -145,13 +148,13 @@ class Publisher(Connection):
 
         self.sock.shutdown(socket.SHUT_RDWR)
         self.sock.close()
-        # signal that we've properly closed the socket
-        self._listen_shutdown.set()
+
+        self.shutdown()
 
     # threading.Thread
     def spin(self) -> None:
 
-        while not self.is_shutdown:
+        while not self._shutdown_event.is_set():
             # rate-limit to prevent 100% CPU usage
             time.sleep(0.01)
 
@@ -176,17 +179,18 @@ class Publisher(Connection):
                     self._subscribers.remove(subscriber)
                     self.log("WARN", f"Removed subscriber <{subscriber.name}> after too many failed sends.")
 
-        self._spin_shutdown.set()
+        self.shutdown()
 
     def shutdown(self) -> None:
+        
+        if self.is_shutdown:
+            return
         self.is_shutdown = True
 
-        self.log("DEBUG", f"Pub: shutting down {self._listen_thread.name}")
-        self._listen_shutdown.set()
-        self.log("DEBUG", f"Pub: shutting down {self._spin_thread.name}")
-        self._spin_shutdown.set()
 
         for thread in [self._listen_thread, self._spin_thread]:
+            if thread.is_alive():
+                continue
             thread.join()
         
     def advertise(
@@ -194,7 +198,7 @@ class Publisher(Connection):
         advertiser_id: str | None
     ) -> bool:
 
-        # advertise the topic to the TopicServer
+        # Advertise the topic to the TopicServer
         try:
             result: bool = advertise_topic_rpc(
                 client_name=advertiser_id if advertiser_id else self.name,
@@ -204,7 +208,7 @@ class Publisher(Connection):
                 message_type=self.topic.message_type
             )
         except grpc.RpcError as e:
-            self.log("ERR", f"that didn't work: {e}")
+            self.log("ERR", f"Failed to advertise: {e}")
             raise e
         
         return result
@@ -325,8 +329,9 @@ class Subscriber(Connection):
     def callbacks(self) -> List[Callable[[Message], None]]:
         return self._callbacks
     
-    def add_publisher(self, publisher_id: str) -> None:
-        pass
+    def add_publisher(self, publisher_info: Tuple[str,str,int]) -> None:
+        self.connect_to_publisher(publisher_info=publisher_info)
+        self._publisher = publisher_info
 
     
 def port_in_use(

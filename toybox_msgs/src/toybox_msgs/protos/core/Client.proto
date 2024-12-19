@@ -7,8 +7,13 @@ import "core/Null.proto";
 
 service Client {
 
-    rpc InformOfPublisher(TopicDefinition) returns (InformConfirmation) {}
+    rpc InformOfPublisher(TopicPublisherInfo) returns (InformConfirmation) {}
     rpc InformOfShutdown(Null) returns (Null) {}
+}
+
+message TopicPublisherInfo {
+    TopicDefinition topic_def = 1;
+    PublisherInfo publisher = 2;
 }
 
 message InformConfirmation {

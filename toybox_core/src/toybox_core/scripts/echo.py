@@ -5,12 +5,13 @@ import importlib
 import sys
 from typing import Any, List
 import uuid
+import time
 
 import toybox_core as tbx
 
 
-def echo_to_console(self, message: Message) -> None:
-    print(message)
+def echo_to_console(message: Message) -> None:
+    print(f"{message}".strip())
     print("---")
 
 def main() -> None:

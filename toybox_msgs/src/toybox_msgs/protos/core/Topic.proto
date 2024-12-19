@@ -7,16 +7,8 @@ import "core/Null.proto";
 service Topic {
 
     rpc AdvertiseTopic(AdvertiseRequest) returns (Confirmation) {}
-    rpc SubscribeTopic(TopicDefinition) returns (SubscriptionResponse) {}
+    rpc SubscribeTopic(SubscriptionRequest) returns (SubscriptionResponse) {}
     rpc ListTopics(Null) returns (TopicList) {}
-}
-
-message SubscriberList {
-    repeated string subscriber_id = 1;
-}
-
-message PublisherList {
-    repeated string publisher_id = 1;
 }
 
 message Confirmation {
@@ -26,29 +18,12 @@ message Confirmation {
 }
 
 message TopicDefinition {
-    string uuid = 1;
-    string topic_name = 2;
-    string message_type = 3;
+    string topic_name = 1;
+    string message_type = 2;
 }
 
 message TopicList {
     repeated TopicDefinition topics = 1;
-}
-
-message AdvertiseRequest {
-    string client_id = 1;
-    string host = 2;
-    int32 topic_port = 3;
-    TopicDefinition topic_def = 4;
-}
-
-message SubscribeResponse {
-    Confirmation confirmation = 1;
-    repeated string publisher_list = 2;
-}
-
-message SubscriptionRequest {
-    TopicDefinition topic_def = 1;
 }
 
 message PublisherInfo {
@@ -57,8 +32,26 @@ message PublisherInfo {
     int32 topic_port = 3;
 }
 
+message AdvertiseRequest {
+    PublisherInfo publisher = 1;
+    TopicDefinition topic_def = 2;
+}
+
+message SubscriptionRequest {
+    string subscriber_id = 1;
+    TopicDefinition topic_def = 2;
+}
+
 message SubscriptionResponse {
     Confirmation conf = 1;
     TopicDefinition topic_def = 2;
     repeated PublisherInfo publisher_list = 3;
+}
+
+message SubscriberList {
+    repeated string subscriber_id = 1;
+}
+
+message PublisherList {
+    repeated string publisher_id = 1;
 }
