@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from dataclasses import dataclass
-from typing import Dict, Union
+from typing import Dict, List, Union
 
 import grpc
 import concurrent.futures as futures
@@ -11,6 +11,8 @@ from toybox_core.Logging import LOG
 from toybox_core.Topic import Topic
 import toybox_msgs.core.Register_pb2 as Register_pb2
 import toybox_msgs.core.Register_pb2_grpc as Register_pb2_grpc
+import toybox_msgs.core.Null_pb2 as Null_pb2
+
 
 @dataclass
 class Client():
@@ -18,6 +20,7 @@ class Client():
     addr: str
     rpc_port: int
     data_port: int
+
 
 class RegisterServicer(Register_pb2_grpc.RegisterServicer):
 
@@ -52,7 +55,7 @@ class RegisterServicer(Register_pb2_grpc.RegisterServicer):
             data_port=meta.data_port if meta.data_port else -1
         )
         
-        LOG("DEBUG", f"Successfully registered client <{client_id}> at <{meta.addr}>")
+        LOG("INFO", f"Registered client <{client_id}> at <{meta.addr}>")
         
         return Register_pb2.RegisterResponse(return_code=0)
 
@@ -78,7 +81,7 @@ class RegisterServicer(Register_pb2_grpc.RegisterServicer):
         
         del self._clients[client_id]
 
-        LOG("DEBUG", f"Successfully de-registered client <{client_id}>.")
+        LOG("INFO", f"De-registered client <{client_id}>.")
         return Register_pb2.RegisterResponse(return_code=0)
     
     def GetClientInfo(
@@ -112,6 +115,28 @@ class RegisterServicer(Register_pb2_grpc.RegisterServicer):
         response.return_code = 0
 
         return response
+    
+    def GetRegisteredClients(
+        self, 
+        request: Null_pb2.Null, 
+        context: grpc.ServicerContext
+    ) -> Register_pb2.ClientList:
+        
+        client_list: Register_pb2.ClientList = Register_pb2.ClientList()
+
+        for _, client in self._clients.items():
+            client_info: Register_pb2.ClientInfo = Register_pb2.ClientInfo()
+            
+            client_info.client_id = client.client_id
+            client_meta: Register_pb2.ClientMetadata = Register_pb2.ClientMetadata(
+                addr=client.addr,
+                port=client.rpc_port,
+                data_port=client.data_port)
+            client_info.meta.CopyFrom(client_meta)
+            
+            client_list.clients.append(client_info)
+        
+        return client_list
 
 channel: grpc.insecure_channel = grpc.insecure_channel('localhost:50051')
 register_stub: Register_pb2_grpc.RegisterStub = Register_pb2_grpc.RegisterStub(channel=channel)
@@ -190,6 +215,22 @@ def get_client_info_rpc(
 
     return result.client
 
+def get_registered_clients_rpc() -> Register_pb2.ClientList:
+
+    request: Null_pb2.Null = Null_pb2.Null()
+    result: Register_pb2.ClientList = register_stub.GetRegisteredClients(request=request)
+
+    registered_clients: List[Client] = []
+    for client_info in result.clients:
+        client: Client = Client(
+            client_id=client_info.client_id,
+            addr=client_info.meta.addr,
+            rpc_port=client_info.meta.port,
+            data_port=client_info.meta.data_port
+        )
+        registered_clients.append(client)
+    
+    return registered_clients
 
 def main() -> None:
 

@@ -62,12 +62,3 @@ message SubscriptionResponse {
     TopicDefinition topic_def = 2;
     repeated PublisherInfo publisher_list = 3;
 }
-
-// message TopicConfirmation {
-//     Confirmation conf = 1;
-//     TopicDefinition topic = 2;
-//     oneof client_list {
-//         SubscriberList subscribers = 3;
-//         PublisherList publishers = 4;
-//     }
-// }

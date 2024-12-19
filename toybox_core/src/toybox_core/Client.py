@@ -16,24 +16,6 @@ from toybox_core.Connection import get_available_port
 from toybox_core.RegisterServer import register_client_rpc, deregister_client_rpc
 from toybox_core.TopicServer import advertise_topic_rpc, subscribe_topic_rpc
 
-
-# This shutdown approach won't work. Python processes
-# run with their own memory, so setting this value
-# only sets it for that single process.
-_IS_SHUTDOWN: bool = False
-_SHUTDOWN_LOCK: threading.Lock = threading.Lock()
-
-def is_shutdown() -> bool:
-    global _IS_SHUTDOWN
-    global _SHUTDOWN_LOCK
-    with _SHUTDOWN_LOCK:
-        return _IS_SHUTDOWN
-
-def signal_shutdown() -> None:
-    global _IS_SHUTDOWN
-    with _SHUTDOWN_LOCK:
-        _IS_SHUTDOWN = True
-
 def deinit_node(
     name: str,
     node: Node | None
@@ -68,23 +50,7 @@ def init_node(
         log_level=log_level,
         autostart=autostart
     )
-    
-    # TODO: FUTURE ME, STOP STARTING THE NODE THE SECOND IT'S CREATED.
-    # THAT WAS A BAD CHOICE, SO STOP MAKING IT
-
     LOG("DEBUG", f"Initialized Node <{name}> with address <{host},{port}>")
-
-    # register ourselves with the master
-    result: bool = register_client_rpc(
-        name=node._name, 
-        host=node._host,
-        port=node._port,
-        data_port=node._msg_port
-    )
-    if not result:
-        LOG("ERR", f"Failed to register node with server.")
-    else:
-        atexit.register(deinit_node, name, node)
 
     return node
 
