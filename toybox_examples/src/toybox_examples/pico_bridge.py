@@ -12,8 +12,6 @@ from toybox_core.Launch import Launchable, launch
 
 from toybox_msgs.core.Test_pb2 import TestMessage
 
-def test_callback(self, message: TestMessage) -> None:
-    print(message.test_string)
 
 class PicoBridge(Launchable):
     
@@ -23,17 +21,17 @@ class PicoBridge(Launchable):
     ) -> None:
         
         self._name = name
-        self._node: Node = tbx.init_node(
+        self._node: tbx.Node.Node = tbx.init_node(
             name=self._name,
-            log_level="DEBUG"
-        )
+            log_level="INFO")
 
-        self._publisher: Optional[Publisher] = self._node.advertise(
+        self._publisher: Publisher | None
+
+    def pre_launch(self) -> bool:
+        self._publisher = self._node.advertise(
             topic_name="/test",
             message_type=TestMessage
         )
-
-    def pre_launch(self) -> bool:
         if self._publisher is None:
             return False
         else:
@@ -48,35 +46,55 @@ class PicoBridge(Launchable):
             )
         return True
 
+    def shutdown(self) -> None:
+        self.node.shutdown()
+
 class Listener(Launchable):
 
     def __init__(
         self, 
-        name: str
+        name: str,
+        topic: str | None = None
     ) -> None:
         
         self._name = name
-        self._node: Node = tbx.init_node(
+        self._node: tbx.Node.Node = tbx.Node.Node(
             name=self._name,
-            log_level="DEBUG")
+            log_level="INFO",
+            autostart=False)
+
+        self.topic = topic if topic is not None else "/test"
+        self.topic = "/test"
+        print(f"TOPIC == {self.topic}, {topic}")
+
+        self._publisher: tbx.Publisher
 
     def callback(self, message: TestMessage) -> None:
         print(message)
 
     def pre_launch(self) -> bool:
-
+        self._node.start()
         self._subscribed: bool = self._node.subscribe(
-            topic_name="/test",
+            topic_name=self.topic,
             message_type=TestMessage,
-            callback_fn=self.callback
-        )
+            callback_fn=self.callback)
         if not self._subscribed:
             return False
+        
+        self._publisher = self._node.advertise(
+            topic_name="/test",
+            message_type=TestMessage)
+        if self._publisher is None:
+            return False
+
+        return True
         
     def launch(self) -> bool:
         freq: int = 10
         while not self._node.is_shutdown():
+        # for _ in range(0,10):
             time.sleep(1/freq)
+        return True
     
     def post_launch(self) -> bool:
         return True

@@ -37,14 +37,13 @@ class Connection():
     lock: threading.Lock = field(default_factory=threading.Lock)
     logger: TbxLogger | None = None
     # thread management
-    shutdown: bool = False
+    is_shutdown: bool = False
     # pub-sub
     topic: Topic | None = None
     # number of failures to receive/send since last success
     failures: int = 0
 
     def connect(self) -> None:
-
         self.sock.connect((self.host, self.port))
         self.initialized = True
 
@@ -52,6 +51,9 @@ class Connection():
         raise NotImplementedError
     
     def spin(self) -> None:
+        raise NotImplementedError
+
+    def shutdown(self) -> None:
         raise NotImplementedError
 
     def log(
@@ -88,7 +90,7 @@ class Publisher(Connection):
         self, 
         topic_name: str, 
         message_type: Message, 
-        host: str, 
+        host: str,
         port: int,
         logger: TbxLogger | None = None
     ) -> None:
@@ -110,10 +112,12 @@ class Publisher(Connection):
 
         self._listen_thread: threading.Thread = threading.Thread(target=self.listen)
         self._listen_shutdown: threading.Event = threading.Event()
+        self._listen_thread.name = f"{topic_name.replace('/','_')}_publisher_listen"
         self._listen_thread.start()
 
         self._spin_thread: threading.Thread = threading.Thread(target=self.spin)
         self._spin_shutdown: threading.Event = threading.Event()
+        self._spin_thread.name = f"{topic_name.replace('/','_')}_publisher_spin"
         self._spin_thread.start()
 
     # threading.Thread
@@ -124,7 +128,7 @@ class Publisher(Connection):
         # make socket non-blocking
         self.sock.settimeout(0)
 
-        while not self.shutdown:
+        while not self.is_shutdown:
             try:
                 conn, addr = self.sock.accept()
                 self.log("DEBUG", f"<{self.name}> accepted conn request from {conn.getpeername()}")
@@ -147,7 +151,7 @@ class Publisher(Connection):
     # threading.Thread
     def spin(self) -> None:
 
-        while not self.shutdown:
+        while not self.is_shutdown:
             # rate-limit to prevent 100% CPU usage
             time.sleep(0.01)
 
@@ -160,7 +164,7 @@ class Publisher(Connection):
                 
                 try:
                     subscriber.sock.sendall(message)
-                    # If we send successfully (don't throw socket error),
+                    # If we send successfully (i.e., don't throw a socket error),
                     # reset our failure counter
                     subscriber.failures = 0
                 except socket.error:
@@ -174,6 +178,17 @@ class Publisher(Connection):
 
         self._spin_shutdown.set()
 
+    def shutdown(self) -> None:
+        self.is_shutdown = True
+
+        self.log("DEBUG", f"Pub: shutting down {self._listen_thread.name}")
+        self._listen_shutdown.set()
+        self.log("DEBUG", f"Pub: shutting down {self._spin_thread.name}")
+        self._spin_shutdown.set()
+
+        for thread in [self._listen_thread, self._spin_thread]:
+            thread.join()
+        
     def advertise(
         self, 
         advertiser_id: str | None
@@ -245,12 +260,13 @@ class Subscriber(Connection):
             self.connect_to_publisher(self._publisher)
 
         self._spin_thread: threading.Thread = threading.Thread(target=self.spin)
+        self._spin_thread.name = f"{topic_name.replace('/','_')}_subscriber"
         self._spin_thread.start()
 
     # threading.Thread
     def spin(self) -> None:
 
-        while not self.shutdown:
+        while not self.is_shutdown:
             time.sleep(0.01)
             
             if self._publisher is None:
@@ -284,8 +300,12 @@ class Subscriber(Connection):
             
             # TODO: could get more robust with callbacks
             for callback in self.callbacks:
-                callback(self, message=unpacked_msg)
+                LOG("DEBUG", "Calling callback")
+                callback(message=unpacked_msg)
 
+    def shutdown(self) -> None:
+        self.is_shutdown = True
+        self._spin_thread.join()
 
     def connect_to_publisher(
         self, 
