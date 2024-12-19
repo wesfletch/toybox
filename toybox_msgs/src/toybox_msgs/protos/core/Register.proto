@@ -2,12 +2,15 @@ syntax = "proto3";
 
 package core;
 
+import "core/Null.proto";
+
 service Register {
     // refactor these to just use Client messages
     rpc RegisterClient(RegisterRequest) returns (RegisterResponse) {}
     rpc DeRegisterClient(DeRegisterRequest) returns (RegisterResponse) {}
     
     rpc GetClientInfo(Client_ID) returns (ClientResponse) {}
+    rpc GetRegisteredClients(Null) returns (ClientList) {}
 }
 
 // or just use context.peer()
@@ -24,6 +27,10 @@ message Client_ID {
 message ClientInfo {
     string client_id = 1;
     ClientMetadata meta = 2;
+}
+
+message ClientList {
+    repeated ClientInfo clients = 1;
 }
 
 message ClientResponse {

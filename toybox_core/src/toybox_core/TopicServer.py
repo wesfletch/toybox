@@ -56,15 +56,18 @@ class TopicRPCServicer(TopicServicer):
         conf.return_code = 0
         conf.status = ""
 
-        # check if this topic already exists
+        # Check if this topic already exists
         topic: Topic | None = self._topics.get(topic_name, None)
         if topic is not None:
+            # The topic already exists, meaning it's either been advertised by a Publisher,
+            # or been subscribed to by a Subscriber.
+            
             # TODO: I think I'd rather not allow two topics to share a name at all. But we'll see...
-            # don't allow a publisher to re-declare a topic
+            # Don't allow a publisher to re-declare a topic it's already declared.
             if advertiser_id in topic.publishers.keys():
                 conf.return_code = 1
                 conf.status = f"multiple advertise for topic <{topic_name}> by publisher <{advertiser_id}>"
-            # don't allow two topics to share a name, but not a type
+            # Don't allow two topics to share a name, but not a type
             elif topic.message_type != message_type:
                 conf.return_code = 2
                 conf.status = f"declared message type <{message_type}> \
@@ -72,7 +75,15 @@ class TopicRPCServicer(TopicServicer):
             else:
                 topic.publishers[advertiser_id] = (advertiser_host, advertiser_port)
                 conf.status = f"Topic <{topic_name}> advertised successfully."
-        else:   
+                print(topic.publishers)
+                print('-----------------------------')
+                print(topic.subscribers)
+                print('-----------------------------')
+                print(self._clients)
+                # print(f"AAAAAAAAAAAAAAAAAAAAAAAAAAA {[self._clients[x] for x in topic.subscribers]}")
+
+        else:
+
             self._topics[topic_name] = Topic(
                 name=topic_name,
                 message_type=message_type,
@@ -111,6 +122,8 @@ class TopicRPCServicer(TopicServicer):
 
         topic: Topic | None = self._topics.get(topic_name, None) 
         if topic is None:
+            # The topic hasn't been advertised by any publishers, or subscribed to
+            # by any other subscribers.
             self._topics[topic_name] = Topic(
                 name=topic_name,
                 message_type=message_type,
@@ -167,7 +180,6 @@ class TopicServer():
         
         self._server.start()
         self.not_started = False
-        # self._server.wait_for_termination()
 
 
 
