@@ -19,6 +19,7 @@ from toybox_core.Connection import (
     get_available_port,
 )
 
+from toybox_core.RegisterServer import deregister_client_rpc, register_client_rpc
 import toybox_msgs.core.Register_pb2 as Register_pb2
 from toybox_core.TopicServer import subscribe_topic_rpc
 
@@ -47,18 +48,22 @@ class Node():
         if log_level:
             self.set_log_level(log_level=log_level)
 
-        # thread management
+        # The shutdown property allows for Node-holders to trigger a shutdown
+        # of this Node.
         self._shutdown: bool = False
+        # The shutdown_event allows killing the node from, for example, a ThreadPoolExecutor
+        # without calling the explicit shutdown() function.
+        self._shutdown_event: threading.Event = threading.Event()
 
         # queue of messages for inbound and outbound connections
         self._connections: Dict[socket.socket, Connection] = {}
         self._conn_lock: threading.Lock = threading.Lock()
         
-        # inbound connections
+        # Subscribers (inbound connections)
         self._subscribers: List[Subscriber] = []
         self._subscribers_lock: threading.Lock = threading.Lock()
 
-        # outbound connections
+        # Publishers (inbound connections)
         self._publishers: List[Publisher] = []
         self._publishers_lock: threading.Lock = threading.Lock()
 
@@ -71,10 +76,12 @@ class Node():
 
         # listen for incoming connections in separate thread
         self.listen_thread: threading.Thread = threading.Thread(target=self._listen)
+        self.listen_thread.name = f"{self._name.replace('/','_')}_listen"
         self._threads.append(self.listen_thread)
 
         # run our spin function as a separate thread
         self.spin_thread: threading.Thread = threading.Thread(target=self._spin)
+        self.spin_thread.name = f"{self._name.replace('/','_')}_spin"
         self._threads.append(self.spin_thread)
 
         self._rpc_server: grpc.Server
@@ -84,28 +91,59 @@ class Node():
 
         atexit.register(self.shutdown)
 
+        self._registered: bool = False
+        self._ready: bool = False
+
         if autostart:
+            print(f"{self._name} auto-starting")
             self.start()
 
     def start(self) -> None:
+
+        # Idempotence
+        if self._ready:
+            return
+
+        if (not self._registered) and (not self._register()):
+            self.log("ERR", f"Failed to register node with tbx server.")
+            raise Exception(f"Could not register node <'{self}'> with tbx-server.")
 
         # non-blocking
         self._rpc_server.start()
 
         for thread in self._threads:
             thread.start()
-
-    def shutdown(self) -> None:
         
+        self._ready = True
+
+    def shutdown(self, requested_by_server: bool = False) -> None:
+
+        self.log("INFO", f"Shutting down. requested_by_server={requested_by_server}.")
+
+        if requested_by_server:
+            # If the server requests that we shut down, we assume that we don't
+            # need to de-register with it.
+            self._registered = False
+
         # Signal to threads that they should stop what they're doing
         self._shutdown = True
 
+        # Make sure all connections, pubs, and subs get the signal to shutdown.
+        for connection in self.connections.values():
+            connection.shutdown()
+        for publisher in self.publishers:
+            publisher.shutdown()
+        for subscriber in self.subscribers:
+            subscriber.shutdown()
+
+        # Wait for any still-living threads to finish up.
         for thread in self._threads:
+            if not thread.is_alive():
+                continue
             thread.join()
 
     def is_shutdown(self) -> bool:
-
-        return self._shutdown
+        return self._shutdown or self._shutdown_event.is_set()
 
     def _configure_rpc_servicer(self) -> None:
         """
@@ -114,11 +152,46 @@ class Node():
 
         self._rpc_server = grpc.server(thread_pool=self._executor)
         add_ClientServicer_to_server(
-            servicer=ClientRPCServicer(subscribers=self._subscribers),
+            servicer=ClientRPCServicer(
+                subscribers=self._subscribers, 
+                shutdown_callback=self.shutdown),
             server=self._rpc_server,
         )
 
         self._rpc_server.add_insecure_port(f'[::]:{self._port}')
+
+    def _register(self) -> bool:
+
+        if self._registered:
+            # Don't re-register.
+            return True
+
+        # Register ourselves with the tbx-server
+        result: bool = register_client_rpc(
+            name=self._name, 
+            host=self._host,
+            port=self._port,
+            data_port=self._msg_port
+        )
+        if not result:
+            return False
+        
+        self._registered = True
+        atexit.register(self._deregister)
+
+        return True
+
+    def _deregister(self) -> None:
+
+        if not self._registered:
+            # Don't attempt to de-register if we're notregistered, 
+            # there's a chance some other shutdown hook got here first.
+            return
+        
+        result: bool = deregister_client_rpc(name=self._name)
+        if not result:
+            self.log("ERROR", f"Failed to de-register node <'{self._name}'>")
+        self._registered = False
 
     # threading.Thread
     def _listen(self) -> None:
@@ -137,8 +210,6 @@ class Node():
             try:
                 conn, addr = self._msg_socket.accept()
                 self.log("DEBUG", f"<{self._name}> accepted conn request from {conn.getpeername()}")
-                # if not self._conn_lock.acquire(blocking=False):
-                #     continue
                 with self._conn_lock:
                     self._connections[conn] = Connection(
                         name="",
@@ -146,7 +217,6 @@ class Node():
                         host=addr[0],
                         port=addr[1],
                     )
-                # self._conn_lock.release()
             except BlockingIOError:
                 time.sleep(0.01)
 
@@ -212,7 +282,6 @@ class Node():
             time.sleep(0.01)
             
             self._spin_once()
-            print(f"aaaa {self._shutdown}")
 
 
     def _handle_message(
@@ -350,33 +419,36 @@ class Node():
     ) -> bool:
     
         # request information about publishers of a specific topic
-        self.log("DEBUG", f"{self._name} requesting topic information")
+        self.log("DEBUG", f"Node <{self._name}> requesting topic info from tbx-server")
         try:
             publishers: List[Tuple[str, int]] = subscribe_topic_rpc(
                 topic_name=topic_name,
                 message_type=message_type.DESCRIPTOR.full_name)
         except grpc.RpcError as rpc_error:
-            self.log("ERR", f"that didn't work: {rpc_error}")
+            self.log("WARN", f"Failed to get publisher info from tbx-server: {rpc_error}")
             return False
         
         if len(publishers) == 0:
-            self.log("DEBUG", f"no publishers declared for topic <{topic_name}>")
+            self.log("WARN", f"No publishers declared for topic <{topic_name}>")
             self._configure_subscriber(
                 topic_name=topic_name,
                 message_type=message_type,
                 publisher_info=None,
-                callback=callback_fn,
-            )
+                callback=callback_fn)
         else:
             self.log("DEBUG", f"At least one publisher for topic <{topic_name}>")
+            if len(publishers) > 1:
+                # TODO: to handle the case where multiple publishers exist for the same topic,
+                # I'll likely need to change the Subscriber class to HOLD a Connection, rather than BE a Connection
+                self.log("WARN", f"Multiple publishers for topic <'{topic_name}'>. This isn't handled gracefully yet.")
+                
             for publisher in publishers:
                 self.log("DEBUG", f"Subscribing to <{topic_name}> from publisher <{publisher[0]}>")
                 self._configure_subscriber(
                     topic_name=topic_name,
                     message_type=message_type,
                     publisher_info=publisher,
-                    callback=callback_fn,
-                )
+                    callback=callback_fn)
 
         return True
     
@@ -422,3 +494,11 @@ class Node():
             pubs: List[Publisher] = self._publishers
             self._publishers_lock.release()
             return pubs
+
+    @property
+    def ready(self) -> bool:
+        return self._ready
+    
+    @property
+    def shutdown_event(self) -> threading.Event:
+        return self._shutdown_event

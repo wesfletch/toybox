@@ -73,15 +73,17 @@ class Entity:
 
     def load_plugin(self, plugin_id: str, plugin: Plugin) -> bool:
 
+        if plugin_id in self._plugins.keys():
+            print("Plugin with ID {plugin_id} already loaded.")
+            return False
+
         try:
-            if self.get_plugin(plugin_id):
-                print("Plugin with ID {plugin_id} already loaded.")
-        except PluginNotFoundException:
             self.plugins[plugin_id] = plugin
             self.plugins[plugin_id].initialize(owner_id=self.id)
-            return True
-
-        return False
+        except Exception as e:
+            raise(e)
+        
+        return True
 
     def get_plugin(self, plugin_id: str) -> Plugin:
         

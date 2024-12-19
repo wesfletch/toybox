@@ -101,7 +101,6 @@ class DiffDrivePlugin(Plugin, BaseControlPluginIF):
 
     def initialize(
         self,
-        # owner: 'Entity'
         owner_id: str
     ) -> None:
         """_summary_
@@ -114,10 +113,14 @@ class DiffDrivePlugin(Plugin, BaseControlPluginIF):
         print(f'Plugin <{self._id}> initialized for Entity <{self.owner_id}>')
 
         # TBX config
-        self._node: tbx.Node = tbx.init_node(
+        self._node: tbx.Node.Node = tbx.Node.Node(
             name=f"{self.owner_id}/{self.id}",
-            log_level="DEBUG")
+            log_level="DEBUG",
+            autostart=True)
         
+        if not self._node.ready:
+            raise Exception
+
         vel_pub_topic: str = f"/{self.owner_id}/{self.id}/velocity"
         self._node.log("DEBUG", f"Publishing velocity on: {vel_pub_topic}")
         self._vel_pub: tbx.Publisher = self._node.advertise(
