@@ -49,7 +49,7 @@ class TopicRPCServicer(TopicServicer):
         IN: AdvertiseRequest
         OUT: Confirmation
         """
-        print("ADVERTISE START")
+
         advertiser_id: str = request.publisher.publisher_id
         advertiser_host: str = request.publisher.publisher_host
         advertiser_port: int = request.publisher.topic_port
@@ -129,7 +129,6 @@ class TopicRPCServicer(TopicServicer):
         context: grpc.ServicerContext,
     ) -> SubscriptionResponse:
 
-
         subscriber_id: str = request.subscriber_id
         topic_name: str = request.topic_def.topic_name
         message_type: str = request.topic_def.message_type
@@ -148,6 +147,8 @@ class TopicRPCServicer(TopicServicer):
                 message_type=message_type,
                 subscribers=[subscriber_id])
         else:
+            # The topic exists, and may or may not already have publishers
+            # associated with it.
             topic.subscribers.append(subscriber_id)
 
             for publisher_id, publisher_info in topic.publishers.items():

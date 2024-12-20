@@ -24,19 +24,27 @@ pip install -r requirements.txt
 echo "--- Installing toybox_* packages with pip ---"
 
 
-# Unfortunately, it looks like I can't do it this way. Pip installing them all in one
-# command causes pip to install toybox dependencies of toybox packages the "normal" way, 
-# in site-packages, which means that they're NOT editable.
+# # Unfortunately, it looks like I can't do it this way. Pip installing them all in one
+# # command causes pip to install toybox dependencies of toybox packages the "normal" way, 
+# # in site-packages, which means that they're NOT editable.
 # if ! pip install -e ./toybox_*; then
 #     echo "Failed to install toybox packages"
 #     exit 1
 # fi
 
-# We're stuck with this stupid way to do it until I dive deeper into this...
-# This is annoying because it won't resolve dependency order, so this script needs to be run several times.
-for package in ./toybox_*; do
-    pip install -e "${package}"
-done
+# # We're stuck with this stupid way to do it until I dive deeper into this...
+# # This is annoying because it won't resolve dependency order, so this script needs to be run several times.
+# for package in ./toybox_*; do
+#     pip install -e "${package}"
+# done
+
+# Running the script multiple times is equally stupid and takes forever, 
+# so I'll just resolve dependency order MYSELF, like a CAVEMAN.
+pip install -e toybox_msgs/
+pip install -e toybox_core/
+pip install -e toybox_sim/
+pip install -e toybox_examples/
+
 echo "--- Finished installing toybox_* packages ---"
 
 popd >/dev/null 2>&1 || exit # $TOYBOX_DIR
