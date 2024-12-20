@@ -32,12 +32,13 @@ class Connection():
     host: str
     port: int
     initialized: bool = False
-    inbound: "Queue[bytes]" = field(default_factory=Queue)
-    outbound: "Queue[bytes]" = field(default_factory=Queue)
+    inbound: Queue[bytes] = field(default_factory=Queue)
+    outbound: Queue[bytes] = field(default_factory=Queue)
     lock: threading.Lock = field(default_factory=threading.Lock)
     logger: TbxLogger | None = None
     # thread management
-    is_shutdown: bool = False
+    _shutdown: bool = False
+    shutdown_event: threading.Event = field(default_factory=threading.Event)
     # pub-sub
     topic: Topic | None = None
     # number of failures to receive/send since last success
@@ -53,7 +54,7 @@ class Connection():
     def spin(self) -> None:
         raise NotImplementedError
 
-    def shutdown(self) -> None:
+    def trigger_shutdown(self) -> None:
         raise NotImplementedError
 
     def log(
@@ -65,24 +66,6 @@ class Connection():
             self.logger.LOG(log_level=log_level, message=message)
         else:
             LOG(log_level=log_level, message=message)
-
-    def wait_for_inbound(self, blocking: bool = True) -> bool:
-        """Test synchronization"""
-        if blocking:
-            while self.inbound.qsize() == 0:
-                continue
-            return True
-        else:
-            return self.inbound.qsize() != 0
-        
-    def wait_for_outbound(self, blocking: bool = True) -> bool:
-        """Test synchronization"""
-        if blocking:
-            while self.outbound.qsize() != 0:
-                continue
-            return True
-        else:
-            return self.inbound.qsize() == 0
         
 class Publisher(Connection):
 
@@ -103,7 +86,7 @@ class Publisher(Connection):
             host=host,
             port=port,
             topic=Topic(name=topic_name, message_type=message_type),
-            logger=logger
+            logger=logger,
         )
         self.sock.bind(('', self.port))
 
@@ -111,9 +94,9 @@ class Publisher(Connection):
 
         self._subscribers: List[Connection] = []
 
-        # TODO: should consolidate this and is_shutdown into a single property,
-        # like I did in Node
-        self._shutdown_event: threading.Event = shutdown_event
+        # Allow the caller to overwrite our shutdown_event, if they want.
+        if shutdown_event is not None:
+            self.shutdown_event = shutdown_event
 
         self._listen_thread: threading.Thread = threading.Thread(target=self.listen)
         self._listen_thread.name = f"{self.name}_{topic_name.replace('/','_')}_publisher_listen"
@@ -131,7 +114,7 @@ class Publisher(Connection):
         # make socket non-blocking
         self.sock.settimeout(0)
 
-        while not self._shutdown_event.is_set():
+        while not self.shutdown:
             try:
                 conn, addr = self.sock.accept()
                 self.log("DEBUG", f"<{self.name}> accepted conn request from {conn.getpeername()}")
@@ -149,12 +132,13 @@ class Publisher(Connection):
         self.sock.shutdown(socket.SHUT_RDWR)
         self.sock.close()
 
-        self.shutdown()
+        # This is just paranoia...
+        self.trigger_shutdown()
 
     # threading.Thread
     def spin(self) -> None:
 
-        while not self._shutdown_event.is_set():
+        while not self.shutdown:
             # rate-limit to prevent 100% CPU usage
             time.sleep(0.01)
 
@@ -179,14 +163,19 @@ class Publisher(Connection):
                     self._subscribers.remove(subscriber)
                     self.log("WARN", f"Removed subscriber <{subscriber.name}> after too many failed sends.")
 
-        self.shutdown()
+        # This is just paranoia...
+        self.trigger_shutdown()
 
-    def shutdown(self) -> None:
+    def trigger_shutdown(self) -> None:
         
-        if self.is_shutdown:
+        # If something else has already made the shutdown property true,
+        # we don't need to worry about killing the threads. They'll die
+        # themselves.
+        if self.shutdown:
             return
-        self.is_shutdown = True
-
+        
+        # Set _shutdown here so nothing else tries to do this
+        self._shutdown = True
 
         for thread in [self._listen_thread, self._spin_thread]:
             if thread.is_alive():
@@ -230,6 +219,10 @@ class Publisher(Connection):
 
         self.outbound.put(packed_message)
 
+    @property
+    def shutdown(self) -> bool:
+        return self._shutdown or self.shutdown_event.is_set()
+
 
 class Subscriber(Connection):
 
@@ -241,7 +234,8 @@ class Subscriber(Connection):
         port: int,
         publisher_info: Tuple[str,str,int] | None = None,
         callback: Callable[[Message], None] | None = None,
-        logger: TbxLogger | None = None
+        logger: TbxLogger | None = None,
+        shutdown_event: threading.Event | None = None
     ) -> None:
         
         Connection.__init__(
@@ -263,6 +257,10 @@ class Subscriber(Connection):
         if self._publisher is not None:
             self.connect_to_publisher(self._publisher)
 
+        # Allow the caller to overwrite our shutdown_event, if they want.
+        if shutdown_event is not None:
+            self.shutdown_event = shutdown_event
+
         self._spin_thread: threading.Thread = threading.Thread(target=self.spin)
         self._spin_thread.name = f"{topic_name.replace('/','_')}_subscriber"
         self._spin_thread.start()
@@ -270,7 +268,7 @@ class Subscriber(Connection):
     # threading.Thread
     def spin(self) -> None:
 
-        while not self.is_shutdown:
+        while not self.shutdown:
             time.sleep(0.01)
             
             if self._publisher is None:
@@ -305,10 +303,13 @@ class Subscriber(Connection):
             # TODO: could get more robust with callbacks
             for callback in self.callbacks:
                 LOG("DEBUG", "Calling callback")
-                callback(message=unpacked_msg)
+                callback(unpacked_msg)
 
-    def shutdown(self) -> None:
-        self.is_shutdown = True
+    def trigger_shutdown(self) -> None:
+        if self.shutdown:
+            return
+        self._shutdown = True
+        
         self._spin_thread.join()
 
     def connect_to_publisher(
@@ -320,6 +321,10 @@ class Subscriber(Connection):
         pub_port: int = publisher_info[2]
         self.sock.connect((pub_host, pub_port))
 
+    def add_publisher(self, publisher_info: Tuple[str,str,int]) -> None:
+        self.connect_to_publisher(publisher_info=publisher_info)
+        self._publisher = publisher_info
+
     @property
     def publisher(self) -> Tuple[str,str,int] | None:
         # get mutex?
@@ -329,9 +334,10 @@ class Subscriber(Connection):
     def callbacks(self) -> List[Callable[[Message], None]]:
         return self._callbacks
     
-    def add_publisher(self, publisher_info: Tuple[str,str,int]) -> None:
-        self.connect_to_publisher(publisher_info=publisher_info)
-        self._publisher = publisher_info
+    @property
+    def shutdown(self) -> bool:
+        return self._shutdown or self.shutdown_event.is_set()
+    
 
     
 def port_in_use(

@@ -76,8 +76,6 @@ class ToyboxServer():
         """
         Send the shutdown signal to any registered clients.
         """
-        print("SHUTDOWN GOT CALLED")
-
         if self._shutdown_event.is_set():
             return
 

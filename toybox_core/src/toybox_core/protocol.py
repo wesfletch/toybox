@@ -97,7 +97,7 @@ def pack_message(
 
 
 def unpack_message(
-    obj_type: Type[Message], 
+    obj_type: Message, 
     message_data: bytes
 ) -> Message:
     """

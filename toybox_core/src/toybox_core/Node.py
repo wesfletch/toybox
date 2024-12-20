@@ -95,7 +95,7 @@ class Node():
         self._ready: bool = False
 
         if autostart:
-            print(f"{self._name} auto-starting")
+            self.log("DEBUG", f"{self._name} auto-starting")
             self.start()
 
     def start(self) -> None:
@@ -134,11 +134,11 @@ class Node():
 
         # Make sure all connections, pubs, and subs get the signal to shutdown.
         for connection in self.connections.values():
-            connection.shutdown()
+            connection.trigger_shutdown()
         for publisher in self.publishers:
-            publisher.shutdown()
+            publisher.trigger_shutdown()
         for subscriber in self.subscribers:
-            subscriber.shutdown()
+            subscriber.trigger_shutdown()
 
         # Wait for any still-living threads to finish up.
         for thread in self._threads:
@@ -178,8 +178,7 @@ class Node():
             name=self._name, 
             host=self._host,
             port=self._port,
-            data_port=self._msg_port
-        )
+            data_port=self._msg_port)
         if not result:
             return False
         
@@ -222,8 +221,7 @@ class Node():
                         name="",
                         sock=conn,
                         host=addr[0],
-                        port=addr[1],
-                    )
+                        port=addr[1])
             except BlockingIOError:
                 time.sleep(0.01)
 
@@ -274,7 +272,6 @@ class Node():
             self.log("DEBUG", f"<{self._name}> sent message to {self._connections[conn].name}: {message}")
             self._connections[conn].sock.sendall(message)
 
-
     # threading.Thread
     def _spin(self) -> None:
         """
@@ -289,7 +286,6 @@ class Node():
             time.sleep(0.01)
             
             self._spin_once()
-
 
     def _handle_message(
         self, 
@@ -401,7 +397,7 @@ class Node():
 
         Returns:
             Publisher | None : If the topic was advertised properly, returns the Publisher, \
-                                   otherwise returns None
+                otherwise returns None
         """
 
         pub: Publisher = self._configure_publisher(
@@ -424,7 +420,7 @@ class Node():
         callback_fn: Callable | None = None
     ) -> bool:
     
-        # request information about publishers of a specific topic
+        # Request information about publishers of a specific topic.
         self.log("DEBUG", f"Node <{self._name}> requesting topic info from tbx-server")
         try:
             publishers: List[Tuple[str, int]] = subscribe_topic_rpc(
@@ -436,7 +432,7 @@ class Node():
             return False
         
         if len(publishers) == 0:
-            self.log("WARN", f"No publishers declared for topic <{topic_name}>")
+            self.log("DEBUG", f"No publishers declared for topic <{topic_name}>")
             self._configure_subscriber(
                 topic_name=topic_name,
                 message_type=message_type,
