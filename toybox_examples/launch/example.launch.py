@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
 
-from toybox_core.Launch import LaunchDescription, get_launch_description
+from toybox_core.Launch import LaunchDescription, get_launch_description, NodeParam
 
 
-def get_launch_descriptions() -> list[LaunchDescription]:
+def get_launch_params() -> list[NodeParam]:
+
+    listener_name: NodeParam = NodeParam(
+        name="listener_name",
+        type=str,
+        required=False)
+
+def get_launch_descriptions(launch_params: list[NodeParam]) -> list[LaunchDescription]:
 
     launch_descs: list[LaunchDescription] = []
 

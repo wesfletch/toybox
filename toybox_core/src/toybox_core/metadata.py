@@ -34,6 +34,7 @@ def find_pyproject_toml(module_name: str) -> pathlib.Path:
 
     raise Exception(f"Found `{module_name}`, but failed to find pyproject.toml")
 
+
 def process_pyproject_toml(pyproject_toml_path: pathlib.Path) -> dict:
     
     if not pyproject_toml_path.exists():
@@ -46,6 +47,7 @@ def process_pyproject_toml(pyproject_toml_path: pathlib.Path) -> dict:
 
     return toml_data
 
+
 @dataclass
 class ToyboxTableSpec:
     # Top-level name of the pyproject.toml "table" that contains toybox-specific metadata.
@@ -56,6 +58,10 @@ class ToyboxTableSpec:
     # The locations that we'll look for message files in this package. Relative to package_root.
     # Can be a path or a filename.
     MESSAGE_FILES: ClassVar[str] = "message-files"
+    # The locations that we'll search for misc. "resources" for this package. Relative to package root.
+    # Can be a path or a filename.
+    RESOURCE_FILES: ClassVar[str] = "resources"
+
     TBX_NAMESPACE: ClassVar[str] = "tbx."
     TBX_NODES: ClassVar[str] = TBX_NAMESPACE + "nodes"
 
@@ -71,6 +77,9 @@ class ToyboxMetadata:
     # The locations that we'll look for message files in this package. Relative to package_root.
     # Can be a path or a filename.
     message_file_locations: list[str] = field(default_factory=list)
+    # The locations that we'll search for misc. "resources" for this package. Relative to package root.
+    # Can be a path or a filename.
+    resource_file_locations: list[str] = field(default_factory=list)
     # Launchable node "entrypoints". Matches what would be returned by importlib.metadata.
     launchable_nodes: dict[str, str] = field(default_factory=dict)
 
@@ -104,44 +113,80 @@ class ToyboxMetadata:
         if tbx_data is None and launchable_nodes is None:
             return None
         
+        # Actually grab the fields from pyproject.toml. ALL FIELDS ARE OPTIONAL.
         meta: ToyboxMetadata = ToyboxMetadata(package_name=project["name"], package_root=toml_path.parent)
         meta.launch_file_locations = tbx_data.get(ToyboxTableSpec.LAUNCH_FILES, [])
         meta.message_file_locations = tbx_data.get(ToyboxTableSpec.MESSAGE_FILES, [])
+        meta.resource_file_locations = tbx_data.get(ToyboxTableSpec.RESOURCE_FILES, [])
         meta.launchable_nodes = launchable_nodes if launchable_nodes else {}
+
         return meta
+
+    def search_for_file_in_paths(self, file_name: str, paths: list[str]) -> pathlib.Path | None:
+
+        for path in paths:
+            file_path: pathlib.Path = self.package_root / path
+            if not file_path.exists():
+                raise Exception(f"Given search path `{file_path}` doesn't exist.")
+            
+            # First, we need to know if the provided path was a directory or a file...
+            if file_path.is_file() and file_path.stem == file_name:
+                return file_path
+            elif file_path.is_dir():
+                # Does the launch file we're looking for exist in this directory?
+                if (file_path / file_name).exists():
+                    return file_path / file_name
 
     def get_launch_file(self, launch_file_name: str) -> pathlib.Path:
 
-        for launch_path in self.launch_file_locations:
-            path: pathlib.Path = self.package_root / launch_path
-            if not path.exists():
-                raise Exception(f"Given launch path `{path}` doesn't exist.")
-            
-            # First, we need to know if the provided path was a directory or a file...
-            if path.is_file() and path.stem == launch_file_name:
-                return path
-            elif path.is_dir():
-                # Does the launch file we're looking for exist in this directory?
-                if (path / launch_file_name).exists():
-                    return path / launch_file_name
-        
-        raise Exception(f"Couldn't find launch file `{launch_file_name}` on any configured path: {[str(self.package_root / path) for path in self.launch_file_locations]}")
+        launch_file: pathlib.Path | None = self.search_for_file_in_paths(
+            file_name=launch_file_name,
+            paths=self.launch_file_locations)
+        if launch_file is None:
+            raise Exception(f"Couldn't find launch file `{launch_file_name}` on any configured path: {[str(self.package_root / path) for path in self.launch_file_locations]}")
     
+        return launch_file
+
+    def get_message_file(self, message_file_name: str) -> pathlib.Path:
+
+        message_file: pathlib.Path | None = self.search_for_file_in_paths(
+            file_name=message_file_name,
+            paths=self.message_file_locations)
+        if message_file is None:
+            raise Exception(f"Couldn't find launch file `{message_file_name}` on any configured path: {[str(self.package_root / path) for path in self.message_file_locations]}")
+    
+        return message_file
+
+    def get_resource(self, resource_name: str) -> pathlib.Path:
+
+        resource_file: pathlib.Path | None = self.search_for_file_in_paths(
+            file_name=resource_name,
+            paths=self.resource_file_locations)
+        if resource_file is None:
+            raise Exception(f"Couldn't find launch file `{resource_name}` on any configured path: {[str(self.package_root / path) for path in self.resource_file_locations]}")
+    
+        return resource_file
+
     def _walk(
         self,
         path: pathlib.Path, 
         ignore_files: list[str] | None = None,
         indent: str = "    "
     ) -> str:
+        """
+        To generate human-readable output, we can walk a path and generate a "human-readable"
+        string for it.
+        This is slightly different than os.walk (and uses os.walk internally).
+        """
         ignore_files: list[str] = ignore_files if ignore_files else []
         
-        s: str = ""
+        returned: str = ""
         
         if not path.exists() or path.name in ignore_files:
             pass
         elif not path.is_dir():
             # If the path is just a file, we're done at this point.
-            s += f"{indent}-> {path.name}: ({path})\n"
+            returned += f"{indent}-> {path.name}: ({path})\n"
         else:
             for root, dirs, files in os.walk(path):
                 dirs.sort()
@@ -154,7 +199,7 @@ class ToyboxMetadata:
                 elif len(files) == 0:
                     continue
                 if relative_path != pathlib.Path("."):
-                    s += f"{indent * indent_num}-> {relative_path}: ({root_path})\n"
+                    returned += f"{indent * indent_num}-> {relative_path}: ({root_path})\n"
                     indent_num += 1
                 
                 if root_path.name in ignore_files:
@@ -162,11 +207,11 @@ class ToyboxMetadata:
                 for file in [pathlib.Path(x) for x in files]:
                     if file.name in ignore_files:
                         continue
-                    s += f"{indent*indent_num}-> {file.name}\n"
+                    returned += f"{indent*indent_num}-> {file.name}\n"
                 
                 indent_num += 1
 
-        return s
+        return returned
 
     def human_readable(self) -> str:
         """
@@ -188,10 +233,16 @@ class ToyboxMetadata:
         for message_path in self.message_file_locations:
             path: pathlib.Path = pathlib.Path(f"{self.package_root}/{message_path}")
             s += self._walk(path=path, ignore_files=ignore_files)
+        s += f"* Resources: \n"
+        for resource_path in self.resource_file_locations:
+            path: pathlib.Path = pathlib.Path(f"{self.package_root}/{resource_path}")
+            s += f"    -> {path}\n"
         s += f"* Nodes: \n"
-        s += "\t None\n"
+        for node_key, node_val in self.launchable_nodes.items():
+            s += f"    -> {node_key}: ({node_val})\n"
 
         return s
+
 
 def find_tbx_packages() -> dict[str,ToyboxMetadata]:
 
