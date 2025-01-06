@@ -45,8 +45,7 @@ def init_node(
         host=host, 
         port=port,
         log_level=log_level,
-        autostart=autostart
-    )
+        autostart=autostart)
     LOG("DEBUG", f"Initialized Node <{name}> with address <{host},{port}>")
 
     return node

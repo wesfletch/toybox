@@ -66,6 +66,7 @@ class ClientRPCServicer(ClientServicer):
         request: Null, 
         context: grpc.ServicerContext
     ) -> Null:
+        
         self._shutdown_callback(True)        
         # This may or may not ever get back to the caller, which doesn't matter
         # since the caller won't be waiting for the response anyway.
