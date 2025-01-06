@@ -102,12 +102,6 @@ class World:
                     # and dt.
                     assert isinstance(plugin, BaseControlPluginIF)
 
-                    # TODO: This should probably go away...
-                    if plugin.id == "DiffyDrivington":
-                        plugin.set_target_velocity(Velocity(linear=Vector3D(x=1), angular=Vector3D(z=(3.14 / 20))))
-                    elif plugin.id == "DiffyDrivington2":
-                        plugin.set_target_velocity(Velocity(linear=Vector3D(x=0), angular=Vector3D(z=(3.14))))
-
                     vel_target: Velocity = plugin.get_target_velocity()
                     vel_current: Velocity = entity.velocity
                     

@@ -1,14 +1,9 @@
 #!/usr/bin/env python3
 
 import math
-import signal
 from typing import Callable, Dict, List, Tuple, Set
 
 import pyglet
-import pyglet.gl as pgl
-from pyglet.math import Vec2
-from pyglet.graphics.shader import Shader, ShaderProgram
-from pyglet.graphics.vertexdomain import VertexList, IndexedVertexList
 from pyglet.window import mouse, key
 
 from toybox_sim.entity import Entity

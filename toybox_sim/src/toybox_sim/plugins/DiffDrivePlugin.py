@@ -95,7 +95,6 @@ class DiffDrivePlugin(Plugin, BaseControlPluginIF):
                     vel_target_timeout: float = float(value)
                     # needs some asserts, eventually
                     self._vel_target_timeout = vel_target_timeout
-                    # self._use_target_timeout = True
                 case _:
                     print(f"Unhandled key ignored: <{key}> == <{value}>")
 
@@ -126,6 +125,13 @@ class DiffDrivePlugin(Plugin, BaseControlPluginIF):
         self._vel_pub: tbx.Publisher = self._node.advertise(
             topic_name=vel_pub_topic,
             message_type=VelocityMsg)
+        
+        cmd_vel_sub_topic: str = f"/{self.owner_id}/{self.id}/cmd_vel"
+        self._node.log("DEBUG", f"Subscribing to command velocity on: {cmd_vel_sub_topic}")
+        self._node.subscribe(
+            topic_name=cmd_vel_sub_topic, 
+            message_type=VelocityMsg,
+            callback_fn=self.set_target_velocity)
 
     def call(
         self, 
@@ -158,7 +164,7 @@ class DiffDrivePlugin(Plugin, BaseControlPluginIF):
 
     def set_target_velocity(
         self,
-        target_vel: Velocity,
+        target_vel: Velocity | VelocityMsg,
         timeout: bool = True
     ) -> None:
         """
@@ -168,7 +174,11 @@ class DiffDrivePlugin(Plugin, BaseControlPluginIF):
             x_vel (float): _description_
             theta_vel (float): _description_
         """
-        self._vel_target = target_vel
+        if isinstance(target_vel, VelocityMsg):
+            self._vel_target = Velocity.from_msg(target_vel)
+        else:
+            self._vel_target = target_vel
+
         self._use_target_timeout = timeout
         self._time_last_target = time.time()
 
