@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
-from dataclasses import dataclass, field
 import pathlib
 import sys
 
 import grpc
 
-from toybox_core.Launch import get_launch_description, launch, launch_all, LaunchDescription, get_launch_descs_from_file
+from toybox_core.Launch import get_launch_description, launch, launch_all, LaunchDescription, get_launch_descs_from_file, NodeParam, \
+    get_launch_params_from_file
 from toybox_core.Logging import LOG
 from toybox_core.metadata import ToyboxMetadata, find_pyproject_toml
 
@@ -47,7 +47,10 @@ def launch_a_file(module_name: str, launch_file_name: str) -> None:
     meta: ToyboxMetadata = ToyboxMetadata.extract_from_toml(toml_path=toml_path)
 
     launch_file: pathlib.Path = meta.get_launch_file(launch_file_name=launch_file_name)
-    launch_group: list[LaunchDescription] = get_launch_descs_from_file(launch_file_path=launch_file)
+    launch_params: dict[str,NodeParam] = get_launch_params_from_file(launch_file_path=launch_file)
+    launch_group: list[LaunchDescription] = get_launch_descs_from_file(
+        launch_file_path=launch_file,
+        launch_params=launch_params)
 
     launch_all(launch_descs=launch_group)
 

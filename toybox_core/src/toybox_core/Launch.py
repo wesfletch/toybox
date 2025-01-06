@@ -54,19 +54,6 @@ class Launchable(ABC):
         else:
             raise NotImplementedError("Need to provide a name property.")
 
-    # @property
-    # def node(self) -> Node:
-    #     if hasattr(self, "_node"):
-    #         return self._node
-    #     else:
-    #         raise NotImplementedError("You're not using the default name for node ('_node'), \
-    #                                   so you must explicitly define the `node` property.")
-
-    # @node.setter
-    # def node(self, node) -> None:
-    #     self._node = node
-
-
 
 T = TypeVar('T')
 @dataclass
@@ -177,7 +164,7 @@ def validate_params(params: Dict[str,NodeParam]) -> bool:
     set params match the expected type.
     """
     for _, param in params.items():
-        if param.required and param.value is Parameter.empty:
+        if param.required and (param.value is Parameter.empty):
             print(f"Failed to provide value for required param <'{param.name}'> with type <'{param.type}'>")
             return False
         elif not isinstance(param.value, param.type):
@@ -239,7 +226,7 @@ class LaunchDescription():
     name: str
     launch_type: LaunchType = LaunchType.NODE
     launchable_class: Launchable | None = None
-    to_launch: Launchable | None = None
+    to_launch: Launchable | None = None # TODO: Could this be Launchable | LaunchDescription? Recursive?
     params: Dict[str, NodeParam] = field(default_factory=dict)
 
     # TODO: unused for now
@@ -257,7 +244,7 @@ class LaunchDescription():
                 param.value = value
 
         if not validate_params(self.params):
-            raise Exception(f"You goofed the params up by changing them!")
+            raise Exception(f"Failed to validate provided parameters.")
         
     def instantiate(self) -> Launchable:
         if self.launchable_class is None:
@@ -285,7 +272,7 @@ def get_launch_description(
     return description
 
 
-def get_launch_descs_from_file(launch_file_path: pathlib.Path) -> list[LaunchDescription]:
+def load_launch_file(launch_file_path: pathlib.Path) -> ModuleType:
 
     spec: ModuleSpec | None = importlib.util.spec_from_file_location(name="launch_file", location=launch_file_path)
     if spec is None:
@@ -293,10 +280,34 @@ def get_launch_descs_from_file(launch_file_path: pathlib.Path) -> list[LaunchDes
     launch_file: ModuleType = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(launch_file)
 
+    return launch_file
+
+
+def get_launch_params_from_file(launch_file_path: pathlib.Path) -> list[NodeParam]:
+    
+    launch_file: ModuleType = load_launch_file(launch_file_path)
+
+    params: list[NodeParam] = []
+
+    try:
+        launch_group: list[LaunchDescription] = launch_file.get_launch_params()
+    except AttributeError:
+        logger.LOG("DEBUG", f"Launch file {launch_file_path} doesn't implement get_launch_params().")
+
+    return params
+
+
+def get_launch_descs_from_file(launch_file_path: pathlib.Path, launch_params: list[NodeParam]) -> list[LaunchDescription]:
+
+    # Make sure we have values for any required params in launch_params
+    
+
+    launch_file: ModuleType = load_launch_file(launch_file_path)
+
     # Here's the nasty bit: I've got no way of KNOWING beforehand that the launch file
     # has the function that I need. So I've gotta do the python thing and leap-before-looking.
     try:
-        launch_group: list[LaunchDescription] = launch_file.get_launch_descriptions()
+        launch_group: list[LaunchDescription] = launch_file.get_launch_descriptions(launch_params=launch_params)
     except AttributeError as e:
         raise Exception(f"Failed to execute get_launch_descriptions() from {launch_file_path}. This function MUST be defined for launch to work properly. Exception was {e}")
 
