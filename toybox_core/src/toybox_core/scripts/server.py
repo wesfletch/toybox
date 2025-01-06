@@ -4,36 +4,27 @@ import atexit
 import signal
 import sys
 import threading
-import time
 from typing import Dict, List
 
 import grpc
 import concurrent.futures as futures
 
-from toybox_core.TopicServer import (
-    Topic,
-    TopicRPCServicer
-)
-from toybox_core.RegisterServer import (
-    Client,
-    RegisterServicer
-)
 from toybox_core.Logging import LOG
+from toybox_core.Launch import Launchable
+from toybox_core.RegisterServer import Client, RegisterServicer
+from toybox_core.TopicServer import Topic, TopicRPCServicer
 
-from toybox_msgs.core import Client_pb2_grpc
 from toybox_msgs.core.Null_pb2 import Null
-from toybox_msgs.core.Register_pb2_grpc import (
-    add_RegisterServicer_to_server
-)
-from toybox_msgs.core.Topic_pb2_grpc import (
-    add_TopicServicer_to_server
-)
+from toybox_msgs.core.Register_pb2_grpc import add_RegisterServicer_to_server
+from toybox_msgs.core.Topic_pb2_grpc import add_TopicServicer_to_server
 
 
-class ToyboxServer():
+class ToyboxServer(Launchable):
 
     def __init__(self) -> None:
         
+        self._name: str = "tbx-server"
+
         self._topics: Dict[str,Topic] = {}
         self._clients: Dict[str,Client] = {}
 
@@ -57,7 +48,7 @@ class ToyboxServer():
             self._server
         )
 
-        rpc_port: int =  self._server.add_insecure_port('[::]:50051')
+        rpc_port: int = self._server.add_insecure_port('[::]:50051')
         
         LOG("INFO", f"Server configured for {str(self._server)} on port {rpc_port}")
         
@@ -65,6 +56,10 @@ class ToyboxServer():
         signal.signal(signal.SIGINT, self.ctrl_c_handler)
 
         self._shutdown_event: threading.Event = threading.Event()
+
+    def launch(self) -> bool:
+        self.serve()
+        return True
 
     def serve(self) -> None:
 
