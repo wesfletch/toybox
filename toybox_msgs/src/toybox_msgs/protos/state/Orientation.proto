@@ -5,3 +5,5 @@ package state;
 message Orientation2D {
     float theta = 1;
 }
+
+// TODO: I don't feel like dealing with quaternions yet.

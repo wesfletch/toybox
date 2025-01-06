@@ -46,6 +46,9 @@ def LOG(
 def set_log_level(
     log_level: str
 ) -> None:
+    """
+    Set the global log level, i.e., the one used by the global LOG function above.
+    """
     if log_level not in log_levels.keys():
         raise Exception(f"Invalid log level <{log_level}>")
     logger.setLevel(log_levels[log_level])
