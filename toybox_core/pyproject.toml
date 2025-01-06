@@ -49,3 +49,4 @@ ToyboxServer = "toybox_core.scripts.server:ToyboxServer"
 [tool.toybox]
 launch-files = []
 message-files = []
+resources = []

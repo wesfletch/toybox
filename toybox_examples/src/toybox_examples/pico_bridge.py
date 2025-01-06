@@ -2,9 +2,7 @@
 
 import threading
 import time
-from typing import List, Optional
-
-from toybox_core.Connection import Subscriber
+from typing import List
 
 import toybox_core as tbx
 from toybox_core import Node, Publisher
@@ -47,7 +45,7 @@ class PicoBridge(Launchable):
         return True
 
     def shutdown(self) -> None:
-        self.node.shutdown()
+        self._node.shutdown()
 
 class Listener(Launchable):
 
@@ -92,7 +90,6 @@ class Listener(Launchable):
     def launch(self) -> bool:
         freq: int = 10
         while not self._node.is_shutdown():
-        # for _ in range(0,10):
             time.sleep(1/freq)
         return True
     
@@ -100,7 +97,7 @@ class Listener(Launchable):
         return True
     
     def shutdown(self) -> None:
-        self.node.shutdown()
+        self._node.shutdown()
 
 def main() -> None:
 
