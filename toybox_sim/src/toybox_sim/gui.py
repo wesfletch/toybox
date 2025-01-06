@@ -201,6 +201,10 @@ class SimWindow(pyglet.window.Window):
     def entities(self, new_entities: Dict[str,Entity]) -> None:
         self._entities = new_entities
 
+    def trigger_shutdown(self) -> None:
+        pyglet.app.exit()
+
+
 def main():
 
     window: SimWindow = SimWindow()

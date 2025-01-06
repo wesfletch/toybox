@@ -1,38 +1,37 @@
+#!/usr/bin/env python3
 
-from typing import TYPE_CHECKING
-
+from toybox_core.Launch import Launchable
+from toybox_sim.context import PluginContext
+from toybox_sim.file_parse import parse_world_file
 from toybox_sim.gui import SimWindow
 from toybox_sim.world import World
-from toybox_sim.context import PluginContext
-if TYPE_CHECKING:
-    from toybox_sim.entity import Entity
 
-class Simulation:
+class Simulation(Launchable):
 
     def __init__(
         self, 
-        name: str, 
-        window: SimWindow | None = None, 
-        world: World | None = None
+        name: str = "simulation", 
+        use_gui: bool = True, 
+        world: str | None = None
     ) -> None:
 
         self._name: str = name
         
-        self._world: World = world if world else World()
+        self._world: World = parse_world_file(world) if world is not None else World()
         self._world_context: PluginContext = PluginContext(self._world)
         for entity in self._world.entities.values():
             for plugin in entity.plugins.values():
                 plugin.context = self._world_context
 
-        self._USE_GUI: bool
-        self._window: SimWindow | None = window
-        if self._window is not None:
-            self._USE_GUI = True
+        self._shutdown: bool = False
+
+        self._USE_GUI: bool = use_gui
+        self._window: SimWindow | None = None
+        if use_gui:
+            self._window = SimWindow()
             self._window.entities = self._world.entities
             self._window.load_visuals(self._window.entities)
             self._window.schedule_loop(self._world.step, frequency=self._world._loop_frequency)
-        else:
-            self._USE_GUI = False
     
     def run(self) -> None:
 
@@ -40,3 +39,13 @@ class Simulation:
             self._window.run()
         else:
             self._world.loop()
+
+    def launch(self) -> bool:
+        self.run()
+        return True
+
+    def shutdown(self) -> None:
+        self._world.trigger_shutdown()
+        if self._window:
+            self._window.trigger_shutdown()
+        self._shutdown = True
