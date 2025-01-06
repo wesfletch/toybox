@@ -39,3 +39,4 @@ DiffDriver = "toybox_examples.DiffDriver:DiffDriver"
 [tool.toybox]
 launch-files = ["launch"]
 message-files = []
+resources = []
