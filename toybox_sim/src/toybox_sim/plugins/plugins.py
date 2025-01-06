@@ -5,8 +5,6 @@ from enum import Enum
 from typing import Any, Dict, Tuple
 import uuid
 
-from typing import TYPE_CHECKING
-
 from toybox_sim.primitives import Pose, Velocity
 from toybox_sim.context import PluginContext
 
@@ -94,7 +92,7 @@ class BaseControlPluginIF(ABC):
         velocity: Velocity,
         current_pose: Pose,
         dt: float
-    ) -> Tuple[float, float, float]:
+    ) -> tuple[float, float, float]:
         raise NotImplementedError
 
     @abstractmethod
@@ -110,3 +108,10 @@ class BaseControlPluginIF(ABC):
         **kwargs
     ) -> None:
         raise NotImplementedError
+
+
+class InteroceptivePluginIF(ABC):
+    """
+    TODO: One day this might actually have something in it. But for now...
+    """
+    pass

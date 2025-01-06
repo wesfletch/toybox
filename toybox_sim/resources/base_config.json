@@ -4,7 +4,6 @@
     [
         {
             "id": "test",
-            "sprite": "star.png",
             "model": "box.ply",
             "plugins": 
             [
@@ -32,7 +31,6 @@
         },
         {
             "id": "testy",
-            "sprite": "star.png",
             "model": "box2.ply",
             "plugins": 
             [
@@ -50,6 +48,12 @@
 
                     "use_vel_target_timeout": false,
                     "vel_target_timeout": 1.0
+                },
+                {
+                    "plugin_id": "ImmyImmington2",
+                    "type": "ImuPlugin",
+
+                    "orientation_output_topic": "/testy/imu" 
                 }
             ]
         }
