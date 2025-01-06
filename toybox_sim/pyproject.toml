@@ -26,6 +26,10 @@ dependencies = [
 [project.scripts]
 tbx-sim = "toybox_sim.scripts.simulate:main"
 
+[project.entry-points."tbx.nodes"]
+ToyboxSim = "toybox_sim.simulation:Simulation"
+
 [tool.toybox]
 launch-files = ["launch"]
 message-files = []
+resources = ["resources"]

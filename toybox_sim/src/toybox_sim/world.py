@@ -21,6 +21,7 @@ class World:
         self._loop_frequency: int = 60
 
         self._entities: Dict[str, Entity] = entities if entities else {}
+        self._shutdown: bool = False
 
     @property
     def name(self) -> str:
@@ -61,7 +62,7 @@ class World:
         dt: float = timestep if (timestep > 0) else loop_period
         start_time: float = time.time()
 
-        while True:
+        while not self._shutdown:
 
             self.step(dt)
             
@@ -130,3 +131,6 @@ class World:
             entity.pose.update(delta_p=position_delta)
 
         self._time += dt
+
+    def trigger_shutdown(self) -> None:
+        self._shutdown = True
