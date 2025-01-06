@@ -16,6 +16,8 @@ dependencies = [
     "grpcio", # gRPC
     "grpcio-tools",
     "toybox_msgs",
+    "toml",
+    "typing-extensions", # since 'Self' didn't make it into Python 3.10
 ]
 
 [project.urls]
@@ -40,3 +42,10 @@ tbx-publish = "toybox_core.scripts.publish:main"
 tbx-topic = "toybox_core.scripts.topic:main"
 tbx-launch = "toybox_core.scripts.launch:main"
 tbx-info =  "toybox_core.scripts.info:main"
+
+[project.entry-points."tbx.nodes"]
+ToyboxServer = "toybox_core.scripts.server:ToyboxServer"
+
+[tool.toybox]
+launch-files = []
+message-files = []

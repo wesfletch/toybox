@@ -25,3 +25,7 @@ dependencies = [
 
 [project.scripts]
 tbx-sim = "toybox_sim.scripts.simulate:main"
+
+[tool.toybox]
+launch-files = ["launch"]
+message-files = []

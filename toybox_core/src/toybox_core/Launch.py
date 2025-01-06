@@ -5,13 +5,18 @@ import atexit
 import concurrent.futures
 from dataclasses import dataclass, field
 from enum import Enum
+import importlib.util
+from importlib.machinery import ModuleSpec
 from importlib.metadata import entry_points, EntryPoints
 from inspect import signature, Signature, Parameter
+import pathlib
 import signal
+from types import ModuleType
 from typing import Any, Dict, Generic, List, TypeVar, get_args
 
 from toybox_core.Node import Node
 from toybox_core.Logging import LOG, TbxLogger
+
 
 class Launchable(ABC):
     """
@@ -43,16 +48,23 @@ class Launchable(ABC):
         raise NotImplementedError
 
     @property
-    def node(self) -> Node:
-        if hasattr(self, "_node"):
-            return self._node
+    def name(self) -> Node:
+        if hasattr(self, "_name"):
+            return self._name
         else:
-            raise NotImplementedError("You're not using the default name for node ('_node'), \
-                                      so you must explicitly define the `node` property.")
+            raise NotImplementedError("Need to provide a name property.")
 
-    @node.setter
-    def node(self, node) -> None:
-        self._node = node
+    # @property
+    # def node(self) -> Node:
+    #     if hasattr(self, "_node"):
+    #         return self._node
+    #     else:
+    #         raise NotImplementedError("You're not using the default name for node ('_node'), \
+    #                                   so you must explicitly define the `node` property.")
+
+    # @node.setter
+    # def node(self, node) -> None:
+    #     self._node = node
 
 
 
@@ -82,7 +94,7 @@ def discover_all_launchable_nodes() -> Dict[str,Launchable]:
         loaded: Any = entry_point.load()
 
         # Make sure that the node actually subclasses the Launchable
-        # interface, so that we can actually "launch()" them later
+        # interface, so that we can launch() them later
         if issubclass(loaded, Launchable):
             all_launchable_nodes[full_name] = loaded
 
@@ -157,6 +169,7 @@ def get_one_launchable_node_params(node: Launchable) -> Dict[str, NodeParam]:
         # like from a @classmethod or prelaunch() or something....
 
     return params
+
 
 def validate_params(params: Dict[str,NodeParam]) -> bool:
     """
@@ -272,6 +285,24 @@ def get_launch_description(
     return description
 
 
+def get_launch_descs_from_file(launch_file_path: pathlib.Path) -> list[LaunchDescription]:
+
+    spec: ModuleSpec | None = importlib.util.spec_from_file_location(name="launch_file", location=launch_file_path)
+    if spec is None:
+        raise Exception(f"Failed to get spec for launch file {launch_file_path}, for some reason.")
+    launch_file: ModuleType = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(launch_file)
+
+    # Here's the nasty bit: I've got no way of KNOWING beforehand that the launch file
+    # has the function that I need. So I've gotta do the python thing and leap-before-looking.
+    try:
+        launch_group: list[LaunchDescription] = launch_file.get_launch_descriptions()
+    except AttributeError as e:
+        raise Exception(f"Failed to execute get_launch_descriptions() from {launch_file_path}. This function MUST be defined for launch to work properly. Exception was {e}")
+
+    return launch_group
+
+
 logger: TbxLogger = TbxLogger(name="launch")
 
 class LaunchError(Exception):
@@ -280,45 +311,50 @@ class LaunchError(Exception):
 
 # TODO: Should separate out pre-, peri-, and post-launch phases, otherwise we can't
 # do any of the fancy analysis stuff that we want to do
-def launch(to_launch: Launchable) -> bool:
+def launch(to_launch: Launchable | LaunchDescription) -> bool:
+    """
+    Launch a single Launchable node.
+    """
 
-    # Don't try to launch things that aren't Launchables
+    # Don't try to launch things that aren't Launchables or LaunchDescriptions
+    if isinstance(to_launch, LaunchDescription):
+        to_launch = to_launch.instantiate()
+
     if not isinstance(to_launch, Launchable):
         raise LaunchError(f"Object provided as arg `to_launch` isn't a Launchable <{to_launch}>")
-    
-    # Don't bother trying to launch anything that doesn't have
-    # an associated Toybox Node
-    if not hasattr(to_launch, "node"):
-        raise LaunchError(f"No 'node' member of Launchable <{to_launch}>. Cannot launch.")
 
-    atexit.register(to_launch.node.shutdown)
+    atexit.register(to_launch.shutdown)
 
-    logger.LOG("DEBUG", f"Pre-launch for <{to_launch.node}>")
+    logger.LOG("DEBUG", f"Pre-launch for <{to_launch.name}>")
     pre_result: bool = to_launch.pre_launch()
     if not pre_result:
-        logger.LOG("DEBUG", f"Pre-launch for <{to_launch.node}> FAILED.")
-        # to_launch.node.shutdown()
+        logger.LOG("DEBUG", f"Pre-launch for <{to_launch.name}> FAILED.")
+        # to_launch.shutdown()
         return False
     
-    logger.LOG("DEBUG", f"Launching node <{to_launch.node}>")
+    logger.LOG("DEBUG", f"Launching node <{to_launch.name}>")
     launch_result: bool = to_launch.launch()
     if not launch_result:
-        # to_launch.node.shutdown()
+        # to_launch.shutdown()
         return False
     
-    logger.LOG("DEBUG", f"Post-launch <{to_launch.node}>")
+    logger.LOG("DEBUG", f"Post-launch <{to_launch.name}>")
     post_result: bool = to_launch.post_launch()
     if not post_result:
-        # to_launch.node.shutdown()
+        # to_launch.shutdown()
         return False
     
-    logger.LOG("DEBUG", f"Calling shutdown on <{to_launch.node}>")
-    to_launch.node.shutdown()
+    logger.LOG("DEBUG", f"Calling shutdown on <{to_launch.name}>")
+    to_launch.shutdown()
 
     return True
 
 
 def launch_all(launch_descs: List[LaunchDescription]) -> None:
+    """
+    Launch all provided LaunchDescriptions in parallel.
+    Returns when all Launched objects have finished.
+    """
 
     launch_group: List[Launchable] = []
     for desc in launch_descs:
@@ -326,7 +362,8 @@ def launch_all(launch_descs: List[LaunchDescription]) -> None:
 
     def ctrl_c_handler(signum, frame) -> None:
         for launched in launch_group:
-            launched.node.shutdown_event.set()
+            # launched.node.shutdown_event.set()
+            launched.shutdown()
     
     signal.signal(signal.SIGINT, ctrl_c_handler)
     with concurrent.futures.ThreadPoolExecutor(max_workers=None) as exec:
