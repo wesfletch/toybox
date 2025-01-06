@@ -42,7 +42,12 @@ def read(
         raise e
 
     # unpack (L)ength -> first PREFIX_LENGTH bytes
-    prefix: Tuple[Any,...] = struct.unpack("HH", prefix_bytes)
+    try:
+        prefix: Tuple[Any,...] = struct.unpack("HH", prefix_bytes)
+    except struct.error as e:
+        # If the sender of a message disconnects suddenly, this is where it'll be caught.
+        return None
+    
     message_type_len: int = prefix[0]
     message_payload_len: int = prefix[1]
     LOG(log_level="DEBUG", message=f"Reading <{message_type_len + message_payload_len}> \
@@ -101,7 +106,7 @@ def unpack_message(
     message_data: bytes
 ) -> Message:
     """
-    Deserialize message data into Message object
+    Deserialize message data into Message object.
 
     Args:
         obj_type (Type[Message]): the expected Message type of the data
@@ -132,6 +137,7 @@ def split_message(
     payload_len: int,
 ) -> Tuple[str, bytes]:
     """
+    Splits a bytes buffer into message-type and message-data.
     Assumes that prefix Length bytes have already been removed.
 
     Args:
