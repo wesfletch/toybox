@@ -250,10 +250,10 @@ class Node():
 
         message: bytes
 
-        # TODO: I've somehow turned this whole block into dead code??? Figure that out.
-        for conn in ready_to_read:
-            message = self._connections[conn].read(conn=conn)
-            self._handle_message(conn=conn, message=message)
+        # # TODO: I've somehow turned this whole block into dead code??? Figure that out.
+        # for conn in ready_to_read:
+        #     message = self._connections[conn].read(conn=conn)
+        #     self._handle_message(conn=conn, message=message)
 
         for conn in ready_to_write:
             connection: Connection | None = self.connections.get(conn, None)
@@ -286,62 +286,6 @@ class Node():
             time.sleep(0.01)
             
             self._spin_once()
-
-    def _handle_message(
-        self, 
-        conn: socket.socket, 
-        message: bytes,
-    ) -> None:
-        """
-        Handle messages that come in from TBX servers or other nodes for the management
-        of this Node, e.g., introductions from other nodes.
-
-        TODO: awaiting refactor... Does this function even get called anymore? How on earth is this
-                still working?
-
-        Args:
-            conn (socket.socket): _description_
-            message (bytes): _description_
-        """
-
-        # TODO: this isn't even correct anymore... What is going on here?
-        message_type, message_data = Connection.split_message(message)
-
-        self.log("DEBUG",f'<{self._name}> received: \n\tmessage_type=<{message_type}>\n\tmessage={message_data!r}')
-
-        # TODO: these should really be broken out into callbacks
-        if message_type == "core.ClientInfo":
-            # this is another client introducing themselves
-            client_info: Register_pb2.ClientInfo = Register_pb2.ClientInfo()
-            try:
-                client_info.ParseFromString(message_data)
-            except DecodeError as e:
-                self.log("ERR", f"We just got garbage: {e}")
-                return
-            
-            if not self._connections[conn].initialized:
-                self.log("DEBUG", f"{self._name} initializing connection with {client_info.client_id}")
-                self._connections[conn].name = client_info.client_id
-                self._connections[conn].initialized = True
-            else:
-                self.log("DEBUG", "already initialized")
-                return
-            
-        elif message_type == "core.Confirmation":
-            
-            confirmation: Topic_pb2.Confirmation = Topic_pb2.Confirmation()
-            try:
-                confirmation.ParseFromString(message_data)
-            except DecodeError as e:
-                self.log("ERR", f"We just got garbage: {e}")
-                return
-            
-            self.log("DEBUG", f"{self._name}: {confirmation}")
-
-        else:
-            self.log("DEBUG", f"Got unhandled message type: <{message_type}>")
-            # messages that aren't explicitly handled just go into the inbound queues
-            self._connections[conn].inbound.put(message.decode('utf-8'))
 
     def _configure_publisher(
         self, 

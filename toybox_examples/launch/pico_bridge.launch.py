@@ -6,8 +6,8 @@ from toybox_core.Launch import Launchable
 
 launchy: Launchable = Launchable()
 
-toybox.init_node(
-    name="testy"
-)
+# toybox.init_node(
+#     name="testy",
+#     autostart=False)
 
 print(launchy)
