@@ -24,3 +24,8 @@ dependencies = [
 
 [project.urls]
 "Source" = "https://github.com/wesfletch/toybox"
+
+
+[tool.toybox]
+launch-files = []
+message-files = ["src/toybox_msgs/protos/"]

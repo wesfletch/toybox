@@ -18,9 +18,24 @@ dependencies = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.hatch.build.targets.wheel]
-packages = ["launch", "src/toybox_examples"]
+[tool.hatch.build.targets.sdist]
+include = ["launch/*.launch.py"]
 
+[tool.hatch.build.targets.wheel]
+# 'packages' only includes the final component of each dir
+# packages = ["launch", "src/toybox_examples"]
+# packages = ["src/toybox_examples"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"./launch" = "launch"
+
+# TODO: This could become part of the toybox table pretty easily, for sure.
 [project.entry-points."tbx.nodes"]
 PicoBridge = "toybox_examples.pico_bridge:PicoBridge"
 Listener = "toybox_examples.pico_bridge:Listener"
+DiffDriver = "toybox_examples.DiffDriver:DiffDriver"
+
+# TODO: An example for how I might add tbx specific information to the .toml files...
+[tool.toybox]
+launch-files = ["launch"]
+message-files = []
