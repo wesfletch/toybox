@@ -27,7 +27,21 @@ class Velocity:
     angular: Vector3D = field(default_factory=Vector3D)
     
     def to_msg(self) -> VelocityMsg:
-        return VelocityMsg(linear=self.linear.to_msg(), angular=self.angular.to_msg())
+        return VelocityMsg(
+            linear=self.linear.to_msg(), 
+            angular=self.angular.to_msg())
+    
+    @classmethod
+    def from_msg(cls, velocity_msg: VelocityMsg) -> "Velocity":
+        linear: Vector3D = Vector3D(
+            x=velocity_msg.linear.x, 
+            y=velocity_msg.linear.y,
+            z=velocity_msg.linear.z)
+        angular: Vector3D = Vector3D(
+            x=velocity_msg.angular.x, 
+            y=velocity_msg.angular.y,
+            z=velocity_msg.angular.z)
+        return Velocity(linear=linear, angular=angular)
     
 @dataclass
 class Position:
