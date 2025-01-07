@@ -89,8 +89,6 @@ class Node():
             max_workers=10)
         self._configure_rpc_servicer()
 
-        atexit.register(self.shutdown)
-
         self._registered: bool = False
         self._ready: bool = False
 
@@ -114,6 +112,7 @@ class Node():
         for thread in self._threads:
             thread.start()
         
+        atexit.register(self.shutdown)
         self._ready = True
 
     def shutdown(self, requested_by_server: bool = False) -> None:

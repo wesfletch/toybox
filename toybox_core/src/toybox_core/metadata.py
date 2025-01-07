@@ -9,10 +9,7 @@ import pathlib
 import sys
 import toml
 from typing import ClassVar
-try:
-    from typing import Self
-except Exception:
-    from typing_extensions import Self
+from typing_extensions import Self
 
 from toybox_core.Logging import LOG
 

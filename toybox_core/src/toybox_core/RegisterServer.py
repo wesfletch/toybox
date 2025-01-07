@@ -206,7 +206,6 @@ def register_client_rpc(
     client_req.meta.addr = host
     client_req.meta.port = port
     client_req.meta.data_port = data_port
-    print(client_req)
 
     try:
         result: Register_pb2.RegisterResponse = register_stub.RegisterClient(request=client_req)

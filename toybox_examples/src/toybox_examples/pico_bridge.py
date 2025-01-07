@@ -6,8 +6,7 @@ from typing import List
 
 import toybox_core as tbx
 from toybox_core import Node, Publisher
-from toybox_core.Launch import Launchable, launch
-
+from toybox_core.launchable import Launchable
 from toybox_msgs.core.Test_pb2 import TestMessage
 
 
@@ -62,8 +61,6 @@ class Listener(Launchable):
             autostart=False)
 
         self.topic = topic if topic is not None else "/test"
-        self.topic = "/test"
-        print(f"TOPIC == {self.topic}, {topic}")
 
         self._publisher: tbx.Publisher
 
@@ -99,30 +96,3 @@ class Listener(Launchable):
     def shutdown(self) -> None:
         self._node.shutdown()
 
-def main() -> None:
-
-    pico_bridge_node: PicoBridge = PicoBridge(name="pico_bridge")
-    listener_node: Listener = Listener(name="listener")
-    
-    threads: List[threading.Thread] = []
-    threads.append(
-        threading.Thread(
-            target=launch, 
-            args=[pico_bridge_node], 
-            name="pico_bridge_node")
-    )
-    threads.append(
-        threading.Thread(
-            target=launch, 
-            args=[listener_node], 
-            name="listener_node")
-    )
-
-    for thread in threads:
-        thread.start()
-
-    for thread in threads:
-        thread.join()
-
-if __name__ == "__main__":
-    main()
