@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from toybox_core.Launch import Launchable
+from toybox_core.launch import Launchable
 from toybox_sim.context import PluginContext
 from toybox_sim.file_parse import parse_world_file
 from toybox_sim.gui import SimWindow

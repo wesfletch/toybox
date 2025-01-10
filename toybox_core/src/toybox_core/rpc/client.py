@@ -3,7 +3,7 @@
 import grpc
 from typing import Callable, List
 
-from toybox_core.Connection import Subscriber
+from toybox_core.connection import Subscriber
 
 import toybox_msgs.core.Client_pb2 as Client_pb2
 from toybox_msgs.core.Client_pb2_grpc import ClientServicer
@@ -38,13 +38,14 @@ class ClientRPCServicer(ClientServicer):
         publisher_host: str = request.publisher.publisher_host
         publisher_port: int = request.publisher.topic_port
 
-        # Check if we have subscriber(s) for the topic being published.
+        # Check if we have subscriber(s) for this topic.
         subscribers: List[Subscriber] = []
         for sub in self._subscribers:
             if sub.topic.name == topic_name:
                 subscribers.append(sub)
 
         if len(subscribers) == 0:
+            print(f"SUBSCRIBERS: {self._subscribers}")
             # The server shouldn't be sending us these unless we previously subscribed
             # to this topic, so not having a Subscriber for the topic constitutes an error.
             return Client_pb2.InformConfirmation(

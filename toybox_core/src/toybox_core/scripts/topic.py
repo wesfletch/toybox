@@ -3,8 +3,8 @@
 import sys
 from typing import List
 
-from toybox_core.TopicServer import list_topics_rpc
-from toybox_core.Topic import Topic
+from toybox_core.rpc.topic import list_topics_rpc
+from toybox_core.topic import Topic
 
 def list_topics() -> None:
     topics: List[Topic] = list_topics_rpc()

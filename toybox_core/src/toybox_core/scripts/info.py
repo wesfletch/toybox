@@ -2,15 +2,15 @@
 
 import os
 import sys
-from typing import List
 
-from toybox_core.RegisterServer import Client, get_registered_clients_rpc
+from toybox_core.client import Client
+from toybox_core.rpc.register import get_registered_clients_rpc
 from toybox_core.metadata import find_tbx_packages, ToyboxMetadata
 
 
 def list_clients() -> None:
 
-    clients: List[Client] = get_registered_clients_rpc()
+    clients: list[Client] = get_registered_clients_rpc()
     for client in clients:
         print(str(client))
 
@@ -40,7 +40,7 @@ def main() -> None:
     
     if verb == "clients":
         list_clients()
-    if verb == "package":
+    elif verb == "package":
         package_name: str | None = None
         try:
             package_name = sys.argv[2]

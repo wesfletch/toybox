@@ -4,26 +4,12 @@ import unittest
 
 import concurrent.futures as futures
 import grpc
-import sys
 
-# sys.path.append('/home/dev/toybox')
 import toybox_msgs.core.Client_pb2 as Client_pb2
-from toybox_msgs.core.Client_pb2_grpc import (
-    # ClientRPCServicer,
-    ClientStub,
-    add_ClientServicer_to_server,
-)
-from toybox_core.Client import (
-    ClientRPCServicer,
-)
-from toybox_msgs.core.Topic_pb2 import (
-    TopicDefinition,
-)
-from toybox_core.TopicServer import (
-    Topic
-)
-
-from typing import Dict, Union, List
+from toybox_msgs.core.Client_pb2_grpc import ClientStub, add_ClientServicer_to_server
+from toybox_core.rpc.client import ClientRPCServicer
+from toybox_msgs.core.Topic_pb2 import TopicDefinition
+from toybox_core.topic import Topic
 
 
 class Test_ClientServicer(unittest.TestCase):
@@ -32,8 +18,8 @@ class Test_ClientServicer(unittest.TestCase):
 
     def setUp(self) -> None:
         
-        self._subscriptions: Dict[str, Topic] = {}
-        self._others: List[str] = []
+        self._subscriptions: dict[str, Topic] = {}
+        self._others: list[str] = []
         
         self._server = grpc.server(
             thread_pool=futures.ThreadPoolExecutor(max_workers=10)

@@ -112,7 +112,7 @@ class DiffDrivePlugin(Plugin, BaseControlPluginIF):
         print(f'Plugin <{self._id}> initialized for Entity <{self.owner_id}>')
 
         # TBX config
-        self._node: tbx.Node.Node = tbx.Node.Node(
+        self._node: tbx.node.Node = tbx.node.Node(
             name=f"{self.owner_id}/{self.id}",
             log_level="DEBUG",
             autostart=True)

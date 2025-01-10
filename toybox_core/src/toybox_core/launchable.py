@@ -2,7 +2,6 @@
 
 from abc import ABC
 
-from toybox_core.Node import Node
 
 class Launchable(ABC):
     """
@@ -34,7 +33,7 @@ class Launchable(ABC):
         raise NotImplementedError
 
     @property
-    def name(self) -> Node:
+    def name(self) -> str:
         if hasattr(self, "_name"):
             return self._name
         else:

@@ -3,11 +3,11 @@
 from dataclasses import dataclass
 import socket
 import struct
-from typing import Any, Tuple, Type
+from typing import Any, Tuple
 
 from google.protobuf.message import Message, DecodeError
 
-from toybox_core.Logging import LOG
+from toybox_core.logging import LOG
 
 PREFIX_LENGTH: int = 4
 PREFIX_TYPE_LENGTH: int = 2

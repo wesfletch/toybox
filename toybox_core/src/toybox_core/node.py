@@ -9,24 +9,22 @@ import time
 from typing import Callable, Dict, List, Tuple
 
 import grpc
-from google.protobuf.message import Message, DecodeError
+from google.protobuf.message import Message
 import concurrent.futures as futures
 
-from toybox_core.Connection import (
+from toybox_core.connection import (
     Connection,
     Subscriber,
     Publisher,
     get_available_port,
 )
 
-from toybox_core.RegisterServer import deregister_client_rpc, register_client_rpc
-import toybox_msgs.core.Register_pb2 as Register_pb2
-from toybox_core.TopicServer import subscribe_topic_rpc
+from toybox_core.rpc.register import deregister_client_rpc, register_client_rpc
+from toybox_core.rpc.topic import subscribe_topic_rpc
 
-from toybox_core.ClientServer import ClientRPCServicer
+from toybox_core.logging import TbxLogger
+from toybox_core.rpc.client import ClientRPCServicer
 from toybox_msgs.core.Client_pb2_grpc import add_ClientServicer_to_server
-import toybox_msgs.core.Topic_pb2 as Topic_pb2
-from toybox_core.Logging import TbxLogger
 
 class Node():
 
@@ -362,11 +360,21 @@ class Node():
         message_type: Message,
         callback_fn: Callable | None = None
     ) -> bool:
-    
+
+        # Create subscriber FIRST to avoid race conditions with tbx-server in
+        # the case that there isn't a publisher when we send the request, but 
+        # there IS a publisher by the time we process the response.  
+        self.log("DEBUG", f"Creating subscriber for {topic_name}.")
+        subscriber: Subscriber = self._configure_subscriber(
+            topic_name=topic_name,
+            message_type=message_type,
+            publisher_info=None,
+            callback=callback_fn)
+
         # Request information about publishers of a specific topic.
-        self.log("DEBUG", f"Node <{self._name}> requesting topic info from tbx-server")
+        self.log("DEBUG", f"Requesting topic info for {topic_name} from server.")
         try:
-            publishers: List[Tuple[str, int]] = subscribe_topic_rpc(
+            publishers: list[tuple[str,str,int]] = subscribe_topic_rpc(
                 subscriber_id=self._name,
                 topic_name=topic_name,
                 message_type=message_type.DESCRIPTOR.full_name)
@@ -374,27 +382,29 @@ class Node():
             self.log("WARN", f"Failed to get publisher info from tbx-server: {rpc_error}")
             return False
         
-        if len(publishers) == 0:
-            self.log("DEBUG", f"No publishers declared for topic <{topic_name}>")
-            self._configure_subscriber(
-                topic_name=topic_name,
-                message_type=message_type,
-                publisher_info=None,
-                callback=callback_fn)
-        else:
-            self.log("DEBUG", f"At least one publisher for topic <{topic_name}>")
+        if publishers:
+            self.log("DEBUG", f"At least one publisher for topic <{topic_name}>: {[pub[0] for pub in publishers]}")
+
+            # The first publisher gets assigned to the subscriber we already created.
+            self.log("DEBUG", f"Connecting to publisher {publishers[0]} for topic {topic_name}")
+            result: bool = subscriber.add_publisher(publishers[0])
+            if not result:
+                self.log("ERR", f"Failed to connect to publisher {publishers[0]}")
+                return False
+
             if len(publishers) > 1:
                 # TODO: to handle the case where multiple publishers exist for the same topic,
                 # I'll likely need to change the Subscriber class to HOLD a Connection, rather than BE a Connection
                 self.log("WARN", f"Multiple publishers for topic <'{topic_name}'>. This isn't handled gracefully yet.")
-                
-            for publisher in publishers:
-                self.log("DEBUG", f"Subscribing to <{topic_name}> from publisher <{publisher[0]}>")
-                self._configure_subscriber(
-                    topic_name=topic_name,
-                    message_type=message_type,
-                    publisher_info=publisher,
-                    callback=callback_fn)
+                for publisher in publishers[1:]:
+                    self.log("DEBUG", f"Subscribing to <{topic_name}> from publisher <{publisher[0]}>")
+                    self._configure_subscriber(
+                        topic_name=topic_name,
+                        message_type=message_type,
+                        publisher_info=publisher,
+                        callback=callback_fn)
+        else:
+            self.log("DEBUG", f"No publishers declared for topic <{topic_name}>")
 
         return True
     

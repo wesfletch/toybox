@@ -13,7 +13,7 @@ import sys
 import threading
 
 # sys.path.append('/home/dev/toybox')
-from toybox_core.Connection import (
+from toybox_core.connection import (
     Connection,
     Subscriber, 
     Publisher
