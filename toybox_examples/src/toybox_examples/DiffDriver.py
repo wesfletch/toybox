@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 
 import time
-import toybox_core as tbx
-from toybox_core import Node, Publisher
-from toybox_core.Launch import Launchable, launch
+
+from toybox_core import Publisher
+from toybox_core.launch import launch
+from toybox_core.launchable import Launchable
+from toybox_core.node import Node
 
 from toybox_msgs.state.Velocity_pb2 import Velocity as VelocityMsg
 from toybox_msgs.state.Orientation_pb2 import Orientation2D as OrientationMsg
+
 
 class DiffDriver(Launchable):
 
@@ -16,7 +19,7 @@ class DiffDriver(Launchable):
     ) -> None:
         
         self._name: str = name
-        self._node: Node.Node = Node.Node(
+        self._node: Node = Node(
             name=self._name,
             log_level="INFO",
             autostart=False)

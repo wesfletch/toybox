@@ -29,6 +29,9 @@ message TopicList {
 message PublisherInfo {
     string publisher_id = 1;
     string publisher_host = 2;
+    // The port that the publisher has reserved for the given topic
+    // TODO: this shouldn't be in this message, it should be in AdvertiseRequest directly,
+    // unless I'm using the same port for all topics???? I shouldn't be...
     int32 topic_port = 3;
 }
 

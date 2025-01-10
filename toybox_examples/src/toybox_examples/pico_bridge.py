@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 
-import threading
 import time
-from typing import List
 
 import toybox_core as tbx
-from toybox_core import Node, Publisher
+from toybox_core import Publisher
 from toybox_core.launchable import Launchable
 from toybox_msgs.core.Test_pb2 import TestMessage
 
@@ -18,17 +16,18 @@ class PicoBridge(Launchable):
     ) -> None:
         
         self._name = name
-        self._node: tbx.Node.Node = tbx.init_node(
+        self._node: tbx.node.Node = tbx.node.Node(
             name=self._name,
-            log_level="INFO")
+            log_level="INFO",
+            autostart=False)
 
         self._publisher: Publisher | None
 
     def pre_launch(self) -> bool:
+        self._node.start()
         self._publisher = self._node.advertise(
             topic_name="/test",
-            message_type=TestMessage
-        )
+            message_type=TestMessage)
         if self._publisher is None:
             return False
         else:
@@ -38,9 +37,7 @@ class PicoBridge(Launchable):
         freq: int = 10
         while not self._node.is_shutdown():
             time.sleep(1/freq)
-            self._publisher.publish(
-                TestMessage(test_string="test test test")
-            )
+            self._publisher.publish(TestMessage(test_string="test test test"))
         return True
 
     def shutdown(self) -> None:
@@ -55,9 +52,9 @@ class Listener(Launchable):
     ) -> None:
         
         self._name = name
-        self._node: tbx.Node.Node = tbx.Node.Node(
+        self._node: tbx.node.Node = tbx.node.Node(
             name=self._name,
-            log_level="INFO",
+            log_level="DEBUG",
             autostart=False)
 
         self.topic = topic if topic is not None else "/test"
@@ -65,7 +62,7 @@ class Listener(Launchable):
         self._publisher: tbx.Publisher
 
     def callback(self, message: TestMessage) -> None:
-        print(message)
+        print(f"{self._name} got {message}")
 
     def pre_launch(self) -> bool:
         self._node.start()
@@ -73,15 +70,15 @@ class Listener(Launchable):
             topic_name=self.topic,
             message_type=TestMessage,
             callback_fn=self.callback)
-        if not self._subscribed:
-            return False
         
         self._publisher = self._node.advertise(
             topic_name="/test",
             message_type=TestMessage)
+
+        if not self._subscribed:
+            return False
         if self._publisher is None:
             return False
-
         return True
         
     def launch(self) -> bool:
