@@ -2,7 +2,7 @@
 
 import pathlib
 
-from toybox_core.Launch import LaunchDescription, get_launch_description, NodeParam, LaunchType, \
+from toybox_core.launch import LaunchDescription, get_launch_description, NodeParam, LaunchType, \
     find_launch_file, get_launch_descs_from_file, get_launch_params_from_file
 
 

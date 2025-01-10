@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
 import toybox_core
-from toybox_core import Client as toybox
-from toybox_core.Launch import Launchable
+from toybox_core import client as toybox
+from toybox_core.launchable import Launchable
 
 launchy: Launchable = Launchable()
 

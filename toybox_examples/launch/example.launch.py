@@ -2,7 +2,7 @@
 
 import pathlib
 
-from toybox_core.Launch import LaunchDescription, get_launch_description, NodeParam, LaunchType, \
+from toybox_core.launch import LaunchDescription, get_launch_description, NodeParam, LaunchType, \
     find_launch_file, get_launch_descs_from_file, get_launch_params_from_file
 
 
@@ -19,7 +19,6 @@ def get_launch_descriptions(launch_params: dict[str,NodeParam]) -> LaunchDescrip
 
     # Unpack the params that we declared in get_launch_params()
     other_listener_name: NodeParam = launch_params.get("other_listener_name", "default")
-    print(f"Yeah, I got the param {other_listener_name}")
 
     listener: LaunchDescription = get_launch_description("Listener")
     listener.set_params({
@@ -45,4 +44,5 @@ def get_launch_descriptions(launch_params: dict[str,NodeParam]) -> LaunchDescrip
         name="listener+pico_bridge",
         launch_type=LaunchType.GROUP,)
     launch_desc.to_launch = [listener, pico_bridge, listener_launch_file]
+    # launch_desc.to_launch = [listener, pico_bridge]
     return launch_desc
