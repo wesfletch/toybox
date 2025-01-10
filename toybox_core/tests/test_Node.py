@@ -4,55 +4,27 @@ import unittest
 
 import concurrent.futures as futures
 import grpc
-from queue import Queue
 import select
 import socket
 import struct
-import sys
 import threading
 
-import toybox_msgs.core.Client_pb2 as Client_pb2
-from toybox_msgs.core.Client_pb2_grpc import (
-    # ClientRPCServicer,
-    ClientStub,
-    add_ClientServicer_to_server,
-)
-from toybox_core.ClientServer import (
-    ClientRPCServicer,
-)
-
-from toybox_core.Connection import (
+from toybox_core.connection import (
     Connection,
 )
 
-from toybox_core.Node import (
-    Node,
-    get_available_port
-)
-from toybox_core.Client import (
-    init_node,
-)
+from toybox_core.node import Node
+from toybox_core.client import init_node
 
-from toybox_msgs.core.Topic_pb2_grpc import (
-    add_TopicServicer_to_server
-)
-from toybox_msgs.core.Topic_pb2 import (
-    TopicDefinition,
-)
-from toybox_core.TopicServer import (
-    Topic,
-    TopicServicer
-)
+from toybox_msgs.core.Topic_pb2_grpc import add_TopicServicer_to_server
+from toybox_msgs.core.Topic_pb2 import TopicDefinition
+from toybox_core.rpc.topic import TopicServicer
+from toybox_core.topic import Topic
 
 import toybox_msgs.core.Register_pb2 as Register_pb2
-from toybox_msgs.core.Register_pb2_grpc import (
-    add_RegisterServicer_to_server
-)
-from toybox_core.RegisterServer import (
-    Client,
-    RegisterServicer,
-    RegisterServer
-)
+from toybox_msgs.core.Register_pb2_grpc import add_RegisterServicer_to_server
+from toybox_core.rpc.register import RegisterServicer, RegisterServer
+from toybox_core.client import Client
 
 from typing import Dict, Union, List
 

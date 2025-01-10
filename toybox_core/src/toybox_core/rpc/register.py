@@ -7,33 +7,13 @@ import grpc
 import concurrent.futures as futures
 import threading
 
-from toybox_core.Logging import LOG
-from toybox_core.Topic import Topic
+from toybox_core.client import Client
+from toybox_core.logging import LOG
+from toybox_core.topic import Topic
 import toybox_msgs.core.Register_pb2 as Register_pb2
 import toybox_msgs.core.Register_pb2_grpc as Register_pb2_grpc
 import toybox_msgs.core.Null_pb2 as Null_pb2
-import toybox_msgs.core.Client_pb2_grpc as Client_pb2_grpc
 
-
-@dataclass
-class Client():
-    client_id: str
-    addr: str
-    rpc_port: int
-    data_port: int
-
-    channel: grpc.Channel | None = None
-    stub: Client_pb2_grpc.ClientStub | None = None
-
-    def get_channel(self) -> grpc.Channel:
-        if self.channel is None:
-            self.channel = grpc.insecure_channel(f'{self.addr}:{self.rpc_port}')
-        return self.channel
-    
-    def get_stub(self) -> Client_pb2_grpc.ClientStub:
-        if self.stub is None:
-            self.stub = Client_pb2_grpc.ClientStub(channel=self.get_channel())
-        return self.stub
 
 class RegisterServicer(Register_pb2_grpc.RegisterServicer):
 
@@ -63,17 +43,22 @@ class RegisterServicer(Register_pb2_grpc.RegisterServicer):
 
         # We don't allow name collisions, client IDs MUST be unique
         if self._clients.get(client_id) is not None:
-            LOG("INFO", f"Refused to register client with name <{client_id}>. Client with that ID already exists.")
+            LOG("WARN", f"Refused to register client with name <{client_id}>. Client with that ID already exists.")
             return Register_pb2.RegisterResponse(
                 return_code=1,
                 status=f"Client with ID <{client_id}> already registered.")
 
-        self._clients[client_id] = Client(
+        new_client: Client = Client(
             client_id=client_id, 
             addr=meta.addr,
             rpc_port=meta.port,
             data_port=meta.data_port if meta.data_port else -1
         )
+        LOG("WARN", f"START INITIALIZE {new_client.client_id}")
+        new_client.initialize()
+        LOG("WARN", f"FINISH INITIALIZE {new_client.client_id}")
+
+        self._clients[client_id] = new_client
         
         LOG("INFO", f"Registered client <{client_id}> at <{meta.addr}>")
         
@@ -119,7 +104,7 @@ class RegisterServicer(Register_pb2_grpc.RegisterServicer):
 
         response: Register_pb2.ClientResponse = Register_pb2.ClientResponse()
 
-        client: Union[Client,None] = self._clients.get(client_id, None)
+        client: Client | None = self._clients.get(client_id, None)
         if client is None:
             response.return_code = 1
             response.status = f"No client found for client_id <{client_id}>"
@@ -165,6 +150,7 @@ class RegisterServicer(Register_pb2_grpc.RegisterServicer):
             client_list.clients.append(client_info)
         
         return client_list
+
 
 channel: grpc.insecure_channel = grpc.insecure_channel('localhost:50051')
 register_stub: Register_pb2_grpc.RegisterStub = Register_pb2_grpc.RegisterStub(channel=channel)
@@ -262,24 +248,3 @@ def get_registered_clients_rpc() -> Register_pb2.ClientList:
         registered_clients.append(client)
     
     return registered_clients
-
-def main() -> None:
-
-    # channel: grpc.insecure_channel = grpc.insecure_channel('localhost:50051')
-    # stub: Client_pb2_grpc.ClientStub = Client_pb2_grpc.ClientStub(channel=channel)
-
-    client_req: Register_pb2.RegisterRequest = Register_pb2.RegisterRequest(
-        client_id="butts",
-        meta=Register_pb2.ClientMetadata(addr="butter", port=27)
-    )
-    conf: Register_pb2.RegisterResponse = register_stub.RegisterClient(request=client_req)
-    print(conf)
-
-    client_id: Register_pb2.Client_ID = Register_pb2.Client_ID(
-        client_id="butts"
-    )
-    conf_2: Register_pb2.ClientResponse = register_stub.GetClientInfo(request=client_id)
-    print(conf_2)
-
-if __name__ == "__main__":
-    main()

@@ -14,11 +14,11 @@ import uuid
 import grpc
 from google.protobuf.message import Message
 
-from toybox_core.Logging import LOG, TbxLogger
+from toybox_core.logging import LOG, TbxLogger
 import toybox_core.protocol
 from toybox_core.protocol import TbxMessage
-from toybox_core.Topic import Topic
-from toybox_core.TopicServer import advertise_topic_rpc
+from toybox_core.topic import Topic
+from toybox_core.rpc.topic import advertise_topic_rpc
 
 class Connection_State(enum.Enum):
     NOT_CONNECTED = 1
@@ -194,10 +194,9 @@ class Publisher(Connection):
                 client_host=self.host,
                 topic_port=self.port,
                 topic_name=self.topic.name,
-                message_type=self.topic.message_type
-            )
+                message_type=self.topic.message_type)
         except grpc.RpcError as e:
-            self.log("ERR", f"Failed to advertise: {e}")
+            self.log("ERR", f"Failed to advertise {self.topic.name}: {e}")
             raise e
         
         return result
@@ -283,9 +282,10 @@ class Subscriber(Connection):
 
                 LOG("DEBUG", f"Message read was: <{message.message_raw}>")
                 split_message: Tuple[str,bytes] = \
-                    toybox_core.protocol.split_message(message.message_raw, 
-                                                       message.type_length, 
-                                                       message.payload_length)
+                    toybox_core.protocol.split_message(
+                        message.message_raw, 
+                        message.type_length, 
+                        message.payload_length)
                 LOG("DEBUG", f"Putting message in inbound queue: <{split_message[1].hex()}>")
                 self.inbound.put(split_message[1])
             
@@ -297,33 +297,41 @@ class Subscriber(Connection):
             LOG("DEBUG", f"Pulling message from inbound queue <{message_bytes.hex()}>")
             unpacked_msg: Message = toybox_core.protocol.unpack_message(
                 obj_type=self.topic.message_type, 
-                message_data=message_bytes
-            )
+                message_data=message_bytes)
             
             # TODO: could get more robust with callbacks
             for callback in self.callbacks:
-                LOG("DEBUG", "Calling callback")
+                LOG("DEBUG", f"Calling callback {repr(callback)}")
                 callback(unpacked_msg)
 
     def trigger_shutdown(self) -> None:
+        
         if self.shutdown:
             return
-        self._shutdown = True
         
+        self._shutdown = True
         self._spin_thread.join()
 
     def connect_to_publisher(
         self, 
         publisher_info: Tuple[str,str,int]
-    ) -> None:
+    ) -> bool:
 
         pub_host: str = publisher_info[1]
         pub_port: int = publisher_info[2]
-        self.sock.connect((pub_host, pub_port))
+        try:
+            self.sock.connect((pub_host, pub_port))
+        except Exception as e:
+            self.log("ERR", f"Failed to connect to publisher at {pub_host}:{pub_port}")
+            return False
+        return True
 
-    def add_publisher(self, publisher_info: Tuple[str,str,int]) -> None:
-        self.connect_to_publisher(publisher_info=publisher_info)
-        self._publisher = publisher_info
+    def add_publisher(self, publisher_info: Tuple[str,str,int]) -> bool:
+        if self.connect_to_publisher(publisher_info=publisher_info):
+            self._publisher = publisher_info
+            return True
+        else:
+            return False
 
     @property
     def publisher(self) -> Tuple[str,str,int] | None:
@@ -356,6 +364,7 @@ def port_in_use(
         # should this handle other exceptions?
     sock.close()
     return False
+
 
 def get_available_port(
     host: str = "localhost",

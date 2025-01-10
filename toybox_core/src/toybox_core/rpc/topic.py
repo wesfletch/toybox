@@ -1,17 +1,11 @@
 #!/usr/bin/env python3
 
-from typing import Dict, List, Tuple, Union
-import uuid
+from typing import Dict, List, Tuple
 
-import concurrent.futures as futures
 import grpc
 from google.protobuf.message import Message
+from queue import Queue
 
-from toybox_msgs.core.Client_pb2_grpc import ClientStub
-from toybox_msgs.core.Client_pb2 import (
-    InformConfirmation,
-    TopicPublisherInfo
-)
 from toybox_msgs.core.Topic_pb2 import (
     AdvertiseRequest,
     Confirmation,
@@ -25,9 +19,9 @@ from toybox_msgs.core.Topic_pb2_grpc import (
 )
 from toybox_msgs.core.Null_pb2 import Null as NullMsg
 
-from toybox_core.RegisterServer import Client
-from toybox_core.Logging import LOG
-from toybox_core.Topic import Topic
+from toybox_core.client import Client
+from toybox_core.logging import LOG
+from toybox_core.topic import Topic
 
 
 class TopicRPCServicer(TopicServicer):
@@ -36,9 +30,12 @@ class TopicRPCServicer(TopicServicer):
         self, 
         topics: Dict[str, Topic],
         clients: Dict[str, Client],
+        announcements: Queue[tuple[str,str]]
     ) -> None:
         self._topics = topics
         self._clients = clients
+
+        self._announcements = announcements
 
     def AdvertiseTopic(
         self, 
@@ -61,9 +58,12 @@ class TopicRPCServicer(TopicServicer):
         conf.return_code = 0
         conf.status = ""
 
+        LOG("DEBUG", f"Received AdvertiseTopic request from {advertiser_id} at {advertiser_host}:{advertiser_port}:\n topic_name: {topic_name}, message_type: {message_type}")
+
         # Check if this topic already exists
         topic: Topic | None = self._topics.get(topic_name, None)
         if topic is None:
+            LOG("DEBUG", f"Creating new topic {topic_name} with type {message_type}")
             # Topic doesn't exist yet, so all we need to do is create a new Topic object
             # to represent it.
             self._topics[topic_name] = Topic(
@@ -73,16 +73,19 @@ class TopicRPCServicer(TopicServicer):
             conf.status = f"Topic <{topic_name}> from client <{advertiser_id}> advertised successfully."
             return conf
         
-        # The topic already exists, meaning it's been advertised by a Publisher
+        # The topic already exists, meaning it's previously been advertised by a Publisher
         # and/or been subscribed to by a Subscriber.
+        LOG("DEBUG", f"Topic {topic_name} already exists.")
         
         # TODO: I think I'd rather not allow two topics to share a name at all. But we'll see...
         if advertiser_id in topic.publishers.keys():
+            LOG("DEBUG", f"Rejecting AdvertiseTopic request from {advertiser_id} for {topic_name}: Advertiser already declared this topic.")
             # Don't allow a publisher to re-declare a topic it's already declared.
             conf.return_code = 1
             conf.status = f"multiple advertise for topic <{topic_name}> by publisher <{advertiser_id}>"
             return conf
         elif topic.message_type != message_type:
+            LOG("DEBUG", f"Rejecting AdvertiseTopic request from {advertiser_id} for {topic_name}: Message type doesn't match.")
             # Don't allow two topics to share a name, but not a type
             conf.return_code = 2
             conf.status = f"declared message type <{message_type}> \
@@ -93,31 +96,19 @@ class TopicRPCServicer(TopicServicer):
         # we were given by the RPC matches it. We're clear to add this new publisher.
         topic.publishers[advertiser_id] = (advertiser_host, advertiser_port)
         conf.status = f"Topic <{topic_name}> advertised successfully."
-           
-        # Finally, we need to make sure that any subscribers that were subscribed to this topic BEFORE
-        # this publisher advertised it are informed that there's a new publisher.
-        for subscriber_name in topic.subscribers:
-            # Special case: a node advertises a topic that it's also subscribed to.
-            # TODO: For now, skip it. May need to actually handle this in the future.
-            if subscriber_name == advertiser_id:
-                continue
+        LOG("DEBUG", f"Added new publisher <{advertiser_id}> for topic {topic_name}")
+        
+        if len(topic.subscribers) == 0:
+            LOG("DEBUG", f"No subscribers for topic <{topic_name}> yet.")
+            return conf
+        else:
+            # If there are subscribers configured for this topic, we'll trust our owner to
+            # inform them after this RPC has returned. 
+            # Store the info in a queue so the owner of this RPC servicer can do that.
+            LOG("DEBUG", f"Deferring announcement for <{topic_name}> from publisher <{advertiser_id}>")
+            self._announcements.put((advertiser_id, request.topic_def.topic_name))
 
-            subscriber: Client | None = self._clients.get(subscriber_name, None)
-            assert subscriber is not None
-
-            # TODO: I'm calling an RPC from the body of another RPC. What are the 
-            # ramifications of that?
-            stub: ClientStub = subscriber.get_stub()
-
-            topic_pub: TopicPublisherInfo = TopicPublisherInfo()
-            topic_pub.topic_def.CopyFrom(request.topic_def)
-            topic_pub.publisher.CopyFrom(request.publisher)
-            inform_conf: InformConfirmation = stub.InformOfPublisher(topic_pub, timeout=1.0)
-
-            if inform_conf.return_code != 0:
-                conf.status = "Failed to inform subscribers of new publisher."
-                conf.status = 1
-
+        LOG("DEBUG", f"AdvertiseTopic request for <{topic_name}> complete.")
         return conf
     
     def DeAdvertiseTopic(self, request, context) -> Confirmation:
@@ -138,8 +129,11 @@ class TopicRPCServicer(TopicServicer):
         response.conf.return_code = 0
         response.topic_def.CopyFrom(request.topic_def)
 
+        LOG("DEBUG", f"Received SubscribeTopic request from {subscriber_id}: topic == <{topic_name}>, message_type == <{message_type}>")
+
         topic: Topic | None = self._topics.get(topic_name, None) 
         if topic is None:
+            LOG("DEBUG", f"Topic {topic_name} with type {message_type} not advertised yet. Creating new topic.")
             # The topic hasn't been advertised by any publishers, or subscribed to
             # by any other subscribers.
             self._topics[topic_name] = Topic(
@@ -149,6 +143,12 @@ class TopicRPCServicer(TopicServicer):
         else:
             # The topic exists, and may or may not already have publishers
             # associated with it.
+            if message_type != topic.message_type:
+                LOG("WARN", f"Subscriber requested message type {message_type} doesn't match topic definition {topic.message_type}")
+                response.conf.return_code = 1
+                return response
+
+            LOG("DEBUG", f"Adding subscriber <{subscriber_id}> to topic <{topic_name}>")
             topic.subscribers.append(subscriber_id)
 
             for publisher_id, publisher_info in topic.publishers.items():
@@ -193,6 +193,7 @@ def advertise_topic_rpc(
     advertise_req.topic_def.message_type = message_type.DESCRIPTOR.full_name
 
     conf: Confirmation = stub.AdvertiseTopic(request=advertise_req)
+    print(f"AdvertiseTopic RPC returned: {conf.return_code}")
     return (conf.return_code == 0)
 
 

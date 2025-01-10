@@ -61,7 +61,7 @@ class ImuPlugin(Plugin, InteroceptivePluginIF):
     ) -> None:
         self._owner_id = owner_id
         
-        self.node: tbx.Node.Node = tbx.Node.Node(
+        self.node: tbx.node.Node = tbx.node.Node(
             name=f"{self.owner_id}/{self.id}",
             log_level="INFO",
             autostart=True)

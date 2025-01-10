@@ -5,7 +5,7 @@ import sys
 
 import grpc
 
-from toybox_core.Launch import (
+from toybox_core.launch import (
     get_launch_description, 
     launch, 
     launch_all, 
@@ -13,7 +13,8 @@ from toybox_core.Launch import (
     get_launch_descs_from_file, 
     NodeParam, 
     get_launch_params_from_file)
-from toybox_core.Logging import LOG
+from toybox_core.launchable import Launchable
+from toybox_core.logging import LOG
 from toybox_core.metadata import ToyboxMetadata, find_pyproject_toml
 
 
@@ -35,7 +36,10 @@ def launch_a_node(node_name: str, **kwargs) -> None:
 
     node: LaunchDescription = get_launch_description(node_name)
     node.set_params(params=kwargs)
-    launch(node)
+    launchable: list[Launchable] = node.instantiate()
+    
+
+    launch(launchable[0])
 
 
 def launch_a_file(module_name: str, launch_file_name: str, **kwargs) -> None:

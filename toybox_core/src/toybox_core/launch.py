@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-from abc import ABC
 import atexit
 import concurrent.futures
 from dataclasses import dataclass, field
@@ -16,7 +15,7 @@ from typing import Any, Dict, Generic, List, TypeVar, get_args
 from typing_extensions import Self
 
 from toybox_core.launchable import Launchable
-from toybox_core.Logging import LOG, TbxLogger
+from toybox_core.logging import LOG, TbxLogger
 from toybox_core.metadata import ToyboxMetadata, find_tbx_packages
 
 
@@ -75,7 +74,7 @@ def discover_one_launchable_node(node_name: str) -> Launchable:
 
 def discover_launchable_node_params(package_name: str, node_name: str) -> Dict[str,NodeParam]:
 
-    returned: Dict[str,NodeParam] = {}
+    launchable_params: Dict[str,NodeParam] = {}
 
     full_node_name: str = f"{package_name}.{node_name}"
     
@@ -89,7 +88,7 @@ def discover_launchable_node_params(package_name: str, node_name: str) -> Dict[s
             if param.name == "self":
                 continue
 
-            returned[param.name] = NodeParam(
+            launchable_params[param.name] = NodeParam(
                 name=param.name, 
                 type=param.annotation,
                 required=(param.default is Parameter.empty),
@@ -98,7 +97,7 @@ def discover_launchable_node_params(package_name: str, node_name: str) -> Dict[s
         # TODO: This would be a good place for "declared" non-constructor tbx params,
         # like from a @classmethod or something....
 
-    return returned
+    return launchable_params
 
 
 def get_one_launchable_node_params(node: Launchable) -> Dict[str, NodeParam]:
@@ -245,6 +244,9 @@ class LaunchDescription():
             # isinstance(launch, Launchable) to fail when it shouldn't. After
             # a few hours of debugging, we're just gonna use this dirty hack for now.
             if hasattr(launch, "__bases__") and Launchable in launch.__bases__:
+                # TODO: I'm providing ALL params of the parent to the launchable here,
+                # could I just provide the needed subset (maybe as a optional param to this function)
+                # when I call instantiate on the nested LaunchDescription?
                 launchables.append(launch(**unravel_params(self.params))) # type: ignore
             elif isinstance(launch, LaunchDescription):
                 # Danger! Recursive...

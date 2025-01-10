@@ -6,12 +6,9 @@ import importlib.metadata
 from importlib.machinery import ModuleSpec
 import os
 import pathlib
-import sys
 import toml
 from typing import ClassVar
 from typing_extensions import Self
-
-from toybox_core.Logging import LOG
 
 
 def find_pyproject_toml(module_name: str) -> pathlib.Path:

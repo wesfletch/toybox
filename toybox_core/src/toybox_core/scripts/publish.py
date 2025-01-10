@@ -29,7 +29,7 @@ def main() -> None:
     sys.modules[module_name] = module
     spec.loader.exec_module(module)
 
-    publish_node: tbx.Node.Node = tbx.init_node(
+    publish_node: tbx.node.Node = tbx.init_node(
         name=f"publisher_{str(uuid.uuid4())}", log_level="DEBUG")
 
     publisher: tbx.Publisher | None = publish_node.advertise(
