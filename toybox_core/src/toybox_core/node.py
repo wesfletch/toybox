@@ -23,8 +23,8 @@ from toybox_core.rpc.register import deregister_client_rpc, register_client_rpc
 from toybox_core.rpc.topic import subscribe_topic_rpc
 
 from toybox_core.logging import TbxLogger
-from toybox_core.rpc.client import ClientRPCServicer
-from toybox_msgs.core.Client_pb2_grpc import add_ClientServicer_to_server
+from toybox_core.rpc.node import NodeRPCServicer
+from toybox_msgs.core.Node_pb2_grpc import add_NodeServicer_to_server
 
 class Node():
 
@@ -152,8 +152,8 @@ class Node():
         """
 
         self._rpc_server = grpc.server(thread_pool=self._executor)
-        add_ClientServicer_to_server(
-            servicer=ClientRPCServicer(
+        add_NodeServicer_to_server(
+            servicer=NodeRPCServicer(
                 subscribers=self._subscribers, 
                 shutdown_callback=self.shutdown),
             server=self._rpc_server,
