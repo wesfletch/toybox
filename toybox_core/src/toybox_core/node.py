@@ -155,7 +155,8 @@ class Node():
         add_NodeServicer_to_server(
             servicer=NodeRPCServicer(
                 subscribers=self._subscribers, 
-                shutdown_callback=self.shutdown),
+                shutdown_callback=self.shutdown,
+                logger=self._logger),
             server=self._rpc_server,
         )
 
@@ -238,7 +239,7 @@ class Node():
             return
 
         # get available [in/out]bound sockets
-        connections: List[socket.socket] = self._connections.keys() 
+        connections: list[socket.socket] = self._connections.keys() 
         ready_to_read, ready_to_write, _ = select.select(
             connections,
             connections,
@@ -262,12 +263,12 @@ class Node():
                 continue
 
             try:
-                message = self._connections[conn].outbound.get(block=False)
+                message = connection.outbound.get(block=False)
             except Empty:
                 continue
 
-            self.log("DEBUG", f"<{self._name}> sent message to {self._connections[conn].name}: {message}")
-            self._connections[conn].sock.sendall(message)
+            self.log("DEBUG", f"<{self._name}> sent message to {connection.name}: {message}")
+            connection.sock.sendall(message)
 
     # threading.Thread
     def _spin(self) -> None:
@@ -307,7 +308,7 @@ class Node():
         self, 
         topic_name: str, 
         message_type: Message, 
-        publisher_info: Tuple[str,str,int] | None,
+        publisher_info: tuple[str,str,int] | None,
         callback: Callable | None = None,
     ) -> Subscriber:
 
@@ -391,6 +392,7 @@ class Node():
             if not result:
                 self.log("ERR", f"Failed to connect to publisher {publishers[0]}")
                 return False
+            self.log("DEBUG", f"Connected successfully to {publishers[0]} for topic {topic_name}")
 
             if len(publishers) > 1:
                 # TODO: to handle the case where multiple publishers exist for the same topic,
@@ -429,25 +431,25 @@ class Node():
         return self._name
 
     @property
-    def connections(self) -> Dict[socket.socket,Connection]:
+    def connections(self) -> dict[socket.socket,Connection]:
         with self._conn_lock:
             return self._connections
     
     @property
-    def subscribers(self) -> List[Subscriber]:
+    def subscribers(self) -> list[Subscriber]:
         if not self._subscribers_lock.acquire(blocking=False):
             return []
         else:
-            subs: List[Subscriber] = self._subscribers
+            subs: list[Subscriber] = self._subscribers
             self._subscribers_lock.release()
             return subs
         
     @property
-    def publishers(self) -> List[Publisher]:
+    def publishers(self) -> list[Publisher]:
         if not self._publishers_lock.acquire(blocking=False):
             return []
         else:
-            pubs: List[Publisher] = self._publishers
+            pubs: list[Publisher] = self._publishers
             self._publishers_lock.release()
             return pubs
 

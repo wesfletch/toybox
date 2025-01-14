@@ -19,12 +19,12 @@ class RegisterServicer(Register_pb2_grpc.RegisterServicer):
 
     def __init__(
         self, 
-        clients: Dict[str,Client],
-        topics: Dict[str,Topic],
+        clients: dict[str,Client],
+        topics: dict[str,Topic],
         deregister_callback: Callable[[str], bool] | None = None
     ) -> None:
-        self._clients: Dict[str,Client] = clients
-        self._topics: Dict[str,Topic] = topics
+        self._clients: dict[str,Client] = clients
+        self._topics: dict[str,Topic] = topics
 
         self._deregister_callback: Callable[[str], bool] | None 
         self._deregister_callback = deregister_callback
@@ -52,15 +52,12 @@ class RegisterServicer(Register_pb2_grpc.RegisterServicer):
             client_id=client_id, 
             addr=meta.addr,
             rpc_port=meta.port,
-            data_port=meta.data_port if meta.data_port else -1
-        )
-        LOG("WARN", f"START INITIALIZE {new_client.client_id}")
+            data_port=meta.data_port if meta.data_port else -1)
         new_client.initialize()
-        LOG("WARN", f"FINISH INITIALIZE {new_client.client_id}")
 
         self._clients[client_id] = new_client
         
-        LOG("INFO", f"Registered client <{client_id}> at <{meta.addr}>")
+        LOG("INFO", f"Registered client <{client_id}> at <{meta.addr}:{meta.port}>")
         
         return Register_pb2.RegisterResponse(return_code=0)
 
