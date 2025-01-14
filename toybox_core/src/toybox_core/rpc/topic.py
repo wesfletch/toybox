@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
-from typing import Dict, List, Tuple
-
+import threading
 import grpc
 from google.protobuf.message import Message
 from queue import Queue
@@ -13,10 +12,7 @@ from toybox_msgs.core.Topic_pb2 import (
     SubscriptionResponse,
     TopicList
 )
-from toybox_msgs.core.Topic_pb2_grpc import (
-    TopicServicer, 
-    TopicStub,
-)
+from toybox_msgs.core.Topic_pb2_grpc import TopicServicer, TopicStub
 from toybox_msgs.core.Null_pb2 import Null as NullMsg
 
 from toybox_core.client import Client
@@ -28,14 +24,16 @@ class TopicRPCServicer(TopicServicer):
 
     def __init__(
         self, 
-        topics: Dict[str, Topic],
-        clients: Dict[str, Client],
+        topics: dict[str, Topic],
+        clients: dict[str, Client],
         announcements: Queue[tuple[str,str]]
     ) -> None:
         self._topics = topics
         self._clients = clients
 
         self._announcements = announcements
+
+        self._topic_lock: threading.Lock = threading.Lock()
 
     def AdvertiseTopic(
         self, 
@@ -61,7 +59,9 @@ class TopicRPCServicer(TopicServicer):
         LOG("DEBUG", f"Received AdvertiseTopic request from {advertiser_id} at {advertiser_host}:{advertiser_port}:\n topic_name: {topic_name}, message_type: {message_type}")
 
         # Check if this topic already exists
-        topic: Topic | None = self._topics.get(topic_name, None)
+        topic: Topic | None = None
+        with self._topic_lock:
+            topic = self._topics.get(topic_name, None)
         if topic is None:
             LOG("DEBUG", f"Creating new topic {topic_name} with type {message_type}")
             # Topic doesn't exist yet, so all we need to do is create a new Topic object
@@ -98,15 +98,11 @@ class TopicRPCServicer(TopicServicer):
         conf.status = f"Topic <{topic_name}> advertised successfully."
         LOG("DEBUG", f"Added new publisher <{advertiser_id}> for topic {topic_name}")
         
-        if len(topic.subscribers) == 0:
-            LOG("DEBUG", f"No subscribers for topic <{topic_name}> yet.")
-            return conf
-        else:
-            # If there are subscribers configured for this topic, we'll trust our owner to
-            # inform them after this RPC has returned. 
-            # Store the info in a queue so the owner of this RPC servicer can do that.
-            LOG("DEBUG", f"Deferring announcement for <{topic_name}> from publisher <{advertiser_id}>")
-            self._announcements.put((advertiser_id, request.topic_def.topic_name))
+        # Defer informing subscribers of this new publisher until after this RPC completes.
+        # This is a (kinda) dirty hack to get around race conditions between SubscribeTopic and AdvertiseTopic.
+        # The client nodes should be smart enough to deal with this.
+        LOG("DEBUG", f"Deferring announcement for <{topic_name}> from publisher <{advertiser_id}>")
+        self._announcements.put((advertiser_id, request.topic_def.topic_name))
 
         LOG("DEBUG", f"AdvertiseTopic request for <{topic_name}> complete.")
         return conf
@@ -131,7 +127,9 @@ class TopicRPCServicer(TopicServicer):
 
         LOG("DEBUG", f"Received SubscribeTopic request from {subscriber_id}: topic == <{topic_name}>, message_type == <{message_type}>")
 
-        topic: Topic | None = self._topics.get(topic_name, None) 
+        topic: Topic | None = None
+        with self._topic_lock:
+            topic = self._topics.get(topic_name, None) 
         if topic is None:
             LOG("DEBUG", f"Topic {topic_name} with type {message_type} not advertised yet. Creating new topic.")
             # The topic hasn't been advertised by any publishers, or subscribed to
@@ -156,6 +154,8 @@ class TopicRPCServicer(TopicServicer):
                     publisher_id=publisher_id,
                     publisher_host=publisher_info[0],
                     topic_port=publisher_info[1])
+
+        LOG("DEBUG", f"SubscribeTopic request from {subscriber_id} FINISHED")
 
         return response
     
@@ -193,7 +193,6 @@ def advertise_topic_rpc(
     advertise_req.topic_def.message_type = message_type.DESCRIPTOR.full_name
 
     conf: Confirmation = stub.AdvertiseTopic(request=advertise_req)
-    print(f"AdvertiseTopic RPC returned: {conf.return_code}")
     return (conf.return_code == 0)
 
 
@@ -201,7 +200,7 @@ def subscribe_topic_rpc(
     subscriber_id: str,
     topic_name: str,
     message_type: str,
-) -> List[Tuple[str,str,int]]:
+) -> list[tuple[str,str,int]]:
 
     subscribe_req: SubscriptionRequest = SubscriptionRequest()
     subscribe_req.subscriber_id = subscriber_id
@@ -210,16 +209,16 @@ def subscribe_topic_rpc(
 
     response: SubscriptionResponse = stub.SubscribeTopic(request=subscribe_req)
 
-    returned: List[Tuple[str,str,int]] = []
+    returned: list[tuple[str,str,int]] = []
     for publisher in response.publisher_list:
         returned.append((publisher.publisher_id, publisher.publisher_host, publisher.topic_port))
 
     return returned
 
 
-def list_topics_rpc() -> List[Topic]:
+def list_topics_rpc() -> list[Topic]:
 
-    returned: List[Topic] = []
+    returned: list[Topic] = []
 
     request: NullMsg = NullMsg()
     response: TopicList = stub.ListTopics(request=request)

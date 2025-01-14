@@ -92,7 +92,7 @@ class Publisher(Connection):
 
         self.topic: Topic # type-hinting shenanigans
 
-        self._subscribers: List[Connection] = []
+        self._subscribers: list[Connection] = []
 
         # Allow the caller to overwrite our shutdown_event, if they want.
         if shutdown_event is not None:
@@ -231,7 +231,7 @@ class Subscriber(Connection):
         message_type: Message,
         host: str,
         port: int,
-        publisher_info: Tuple[str,str,int] | None = None,
+        publisher_info: tuple[str,str,int] | None = None,
         callback: Callable[[Message], None] | None = None,
         logger: TbxLogger | None = None,
         shutdown_event: threading.Event | None = None
@@ -250,13 +250,13 @@ class Subscriber(Connection):
         
         self.topic: Topic
 
-        self._callbacks: List[Callable[[Message], None]] = [callback] if callback else []
+        self._callbacks: list[Callable[[Message], None]] = [callback] if callback else []
         
         self._publisher = publisher_info
         if self._publisher is not None:
             self.connect_to_publisher(self._publisher)
 
-        # Allow the caller to overwrite our shutdown_event, if they want.
+        # Allow the caller to overwrite our (parent) shutdown_event, if they want.
         if shutdown_event is not None:
             self.shutdown_event = shutdown_event
 
@@ -314,19 +314,27 @@ class Subscriber(Connection):
 
     def connect_to_publisher(
         self, 
-        publisher_info: Tuple[str,str,int]
+        publisher_info: tuple[str,str,int]
     ) -> bool:
-
+        
+        pub_name: str = publisher_info[0]
         pub_host: str = publisher_info[1]
         pub_port: int = publisher_info[2]
+        
         try:
             self.sock.connect((pub_host, pub_port))
         except Exception as e:
-            self.log("ERR", f"Failed to connect to publisher at {pub_host}:{pub_port}")
+            self.log("ERR", f"Failed to connect to publisher <{pub_name}> at {pub_host}:{pub_port}")
             return False
+
         return True
 
-    def add_publisher(self, publisher_info: Tuple[str,str,int]) -> bool:
+    def add_publisher(self, publisher_info: tuple[str,str,int]) -> bool:
+
+        if self._publisher is not None:
+            self.log("DEBUG", f"Subscriber already has a publisher {self._publisher}. Will not add {publisher_info}")
+            return True
+
         if self.connect_to_publisher(publisher_info=publisher_info):
             self._publisher = publisher_info
             return True
@@ -334,12 +342,12 @@ class Subscriber(Connection):
             return False
 
     @property
-    def publisher(self) -> Tuple[str,str,int] | None:
+    def publisher(self) -> tuple[str,str,int] | None:
         # get mutex?
         return self._publisher
     
     @property
-    def callbacks(self) -> List[Callable[[Message], None]]:
+    def callbacks(self) -> list[Callable[[Message], None]]:
         return self._callbacks
     
     @property
@@ -347,7 +355,7 @@ class Subscriber(Connection):
         return self._shutdown or self.shutdown_event.is_set()
     
 
-    
+
 def port_in_use(
     port: int, 
     host: str = 'localhost'
