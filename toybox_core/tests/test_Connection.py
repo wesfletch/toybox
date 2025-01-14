@@ -19,7 +19,7 @@ from toybox_core.connection import (
     Publisher
 )
 from toybox_msgs.core.Test_pb2 import TestMessage
-from toybox_msgs.core.Client_pb2 import InformConfirmation
+from toybox_msgs.core.Node_pb2 import InformConfirmation
 
 from typing import Dict, Union, List
 

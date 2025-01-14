@@ -5,14 +5,14 @@ import unittest
 import concurrent.futures as futures
 import grpc
 
-import toybox_msgs.core.Client_pb2 as Client_pb2
-from toybox_msgs.core.Client_pb2_grpc import ClientStub, add_ClientServicer_to_server
-from toybox_core.rpc.client import ClientRPCServicer
+import toybox_msgs.core.Node_pb2 as Node_pb2
+from toybox_msgs.core.Node_pb2_grpc import NodeStub, add_NodeServicer_to_server
+from toybox_core.rpc.node import NodeRPCServicer
 from toybox_msgs.core.Topic_pb2 import TopicDefinition
 from toybox_core.topic import Topic
 
 
-class Test_ClientServicer(unittest.TestCase):
+class test_NodeServicer(unittest.TestCase):
 
     port: int = 50505
 
@@ -25,9 +25,9 @@ class Test_ClientServicer(unittest.TestCase):
             thread_pool=futures.ThreadPoolExecutor(max_workers=10)
         )
         self._server.add_insecure_port(f'[::]:{self.port}')
-        add_ClientServicer_to_server(
+        add_NodeServicer_to_server(
             server=self._server,
-            servicer=ClientRPCServicer(subscriptions=self._subscriptions,
+            servicer=NodeRPCServicer(subscriptions=self._subscriptions,
                                     #    others=self._others,
                                        )
         )
@@ -45,9 +45,9 @@ class Test_ClientServicer(unittest.TestCase):
         )
 
         # we've been informed of a topic we don't care about
-        response: Client_pb2.InformConfirmation
+        response: Node_pb2.InformConfirmation
         with grpc.insecure_channel(f'localhost:{self.port}') as channel:
-            stub = ClientStub(channel=channel)
+            stub = NodeStub(channel=channel)
             response = stub.InformOfPublisher(request=request)
         self.assertEqual(response.return_code, 1)
         
@@ -57,7 +57,7 @@ class Test_ClientServicer(unittest.TestCase):
             message_type="test_message_type"
         )
         with grpc.insecure_channel(f'localhost:{self.port}') as channel:
-            stub = ClientStub(channel=channel)
+            stub = NodeStub(channel=channel)
             response = stub.InformOfPublisher(request=request)
         self.assertEqual(response.return_code, 2)
 
@@ -65,7 +65,7 @@ class Test_ClientServicer(unittest.TestCase):
         # modify request to contain proper message type
         request.message_type = "test_message_type"
         with grpc.insecure_channel(f'localhost:{self.port}') as channel:
-            stub = ClientStub(channel=channel)
+            stub = NodeStub(channel=channel)
             response = stub.InformOfPublisher(request=request)
         self.assertEqual(response.return_code, 0)
 

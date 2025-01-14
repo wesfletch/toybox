@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 import grpc
 import threading
 
-from toybox_msgs.core.Client_pb2_grpc import ClientStub
+from toybox_msgs.core.Node_pb2_grpc import NodeStub
 
 from toybox_core.logging import LOG
 
@@ -23,7 +23,7 @@ class Client():
 
     _mutex: threading.Lock = field(default_factory=threading.Lock)
     _channel: grpc.Channel | None = None
-    _stub: ClientStub | None = None
+    _stub: NodeStub | None = None
 
     _initialized: bool = False
 
@@ -38,7 +38,7 @@ class Client():
                     self._channel = grpc.insecure_channel(f'{self.addr}:{self.rpc_port}')
                 if self._stub is None:
                     LOG("DEBUG", f"Initializing stub for {self.client_id}")
-                    self._stub = ClientStub(channel=self._channel)
+                    self._stub = NodeStub(channel=self._channel)
         
         self._initialized = True
         LOG("DEBUG", f"Finished initializing client <{self.client_id}>")
@@ -48,13 +48,13 @@ class Client():
         if not self._initialized:
             raise Exception(f"Client {self.client_id} not initialized.")
         with self._mutex:
-            LOG("DEBUG", f"Getting channel for {self.client_id}")
+            # LOG("DEBUG", f"Getting channel for {self.client_id}")
             return self._channel
 
     @property
-    def stub(self) -> ClientStub:
+    def stub(self) -> NodeStub:
         if not self._initialized:
             raise Exception(f"Client {self.client_id} not initialized.")
         with self._mutex:
-            LOG("DEBUG", f"Getting stub for {self.client_id}")
+            # LOG("DEBUG", f"Getting stub for {self.client_id}")
             return self._stub

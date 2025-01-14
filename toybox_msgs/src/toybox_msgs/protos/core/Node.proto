@@ -5,7 +5,7 @@ package core;
 import "core/Topic.proto";
 import "core/Null.proto";
 
-service Client {
+service Node {
 
     rpc InformOfPublisher(TopicPublisherInfo) returns (InformConfirmation) {}
     rpc InformOfShutdown(Null) returns (Null) {}
