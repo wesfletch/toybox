@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from google.protobuf.message import Message
-from typing import Dict, List, Tuple, Callable
+from typing import Callable
 
 from toybox_msgs.core.Topic_pb2 import TopicDefinition
 
@@ -10,10 +10,10 @@ from toybox_msgs.core.Topic_pb2 import TopicDefinition
 class Topic():
     name: str
     message_type: Message
-    publishers: Dict[str, Tuple[str,int]] = field(default_factory=dict) # {client, addr}
-    subscribers: List[str] = field(default_factory=list)
+    publishers: dict[str, tuple[str,int]] = field(default_factory=dict) # {client, addr}
+    subscribers: list[str] = field(default_factory=list)
 
-    callbacks: List[Callable] = field(default_factory=list)
+    callbacks: list[Callable] = field(default_factory=list)
 
     confirmed: bool = False
 

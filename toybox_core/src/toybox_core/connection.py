@@ -324,7 +324,7 @@ class Subscriber(Connection):
         try:
             self.sock.connect((pub_host, pub_port))
         except Exception as e:
-            self.log("ERR", f"Failed to connect to publisher <{pub_name}> at {pub_host}:{pub_port}")
+            self.log("ERR", f"Failed to connect to publisher <{pub_name}> at {pub_host}:{pub_port}: {e}")
             return False
 
         return True

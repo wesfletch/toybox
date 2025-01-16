@@ -18,20 +18,6 @@ from toybox_core.logging import LOG
 from toybox_core.metadata import ToyboxMetadata, find_pyproject_toml
 
 
-# TBX_SERVER_DEFAULT_PORT: int = 50051
-
-# '[::]:50051'
-
-def is_tbx_server_running(channel: grpc.Channel) -> bool:
-
-    timeout_sec: int = 1
-    try:
-        grpc.channel_ready_future(channel).result(timeout=timeout_sec)
-    except grpc.FutureTimeoutError:
-        return False
-    
-    return True
-
 def launch_a_node(node_name: str, **kwargs) -> None:
 
     node: LaunchDescription = get_launch_description(node_name)

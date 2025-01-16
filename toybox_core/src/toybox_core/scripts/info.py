@@ -35,8 +35,8 @@ def info_about_package(package_name: str) -> None:
 
 def main() -> None:
 
-    assert len(sys.argv) >= 1, "Needs at least 1 argument"
-    verb: str  = sys.argv[1]
+    assert len(sys.argv) >= 2, "Needs at least 1 argument"
+    verb: str = sys.argv[1]
     
     if verb == "clients":
         list_clients()
