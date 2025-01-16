@@ -71,14 +71,14 @@ class Listener(Launchable):
             message_type=TestMessage,
             callback_fn=self.callback)
         
-        self._publisher = self._node.advertise(
-            topic_name="/test",
-            message_type=TestMessage)
+        # self._publisher = self._node.advertise(
+        #     topic_name="/test",
+        #     message_type=TestMessage)
 
         if not self._subscribed:
             return False
-        if self._publisher is None:
-            return False
+        # if self._publisher is None:
+        #     return False
         return True
         
     def launch(self) -> bool:
