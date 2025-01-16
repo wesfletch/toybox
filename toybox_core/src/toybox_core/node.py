@@ -6,7 +6,7 @@ import select
 import socket
 import threading
 import time
-from typing import Callable, Dict, List, Tuple
+from typing import Callable
 
 import grpc
 from google.protobuf.message import Message
@@ -54,15 +54,15 @@ class Node():
         self._shutdown_event: threading.Event = threading.Event()
 
         # queue of messages for inbound and outbound connections
-        self._connections: Dict[socket.socket, Connection] = {}
+        self._connections: dict[socket.socket, Connection] = {}
         self._conn_lock: threading.Lock = threading.Lock()
         
         # Subscribers (inbound connections)
-        self._subscribers: List[Subscriber] = []
+        self._subscribers: list[Subscriber] = []
         self._subscribers_lock: threading.Lock = threading.Lock()
 
-        # Publishers (inbound connections)
-        self._publishers: List[Publisher] = []
+        # Publishers (outbound connections)
+        self._publishers: list[Publisher] = []
         self._publishers_lock: threading.Lock = threading.Lock()
 
         # open socket for message-passing between clients
@@ -70,7 +70,7 @@ class Node():
         self._msg_port = get_available_port(host=self._host, start=self._port+1)
         self._msg_socket.bind((self._host, self._msg_port))
 
-        self._threads: List[threading.Thread] = []
+        self._threads: list[threading.Thread] = []
 
         # listen for incoming connections in separate thread
         self.listen_thread: threading.Thread = threading.Thread(target=self._listen)
@@ -118,7 +118,7 @@ class Node():
         # Idempotence
         if self._shutdown:
             return
-
+        
         self.log("INFO", f"Shutting down {self._name}. requested_by_server={requested_by_server}.")
 
         if requested_by_server:
@@ -142,6 +142,8 @@ class Node():
             if not thread.is_alive():
                 continue
             thread.join()
+
+        self.log("INFO", f"Finished shutdown.")
 
     def is_shutdown(self) -> bool:
         return self._shutdown or self._shutdown_event.is_set()
@@ -188,13 +190,11 @@ class Node():
     def _deregister(self) -> None:
 
         if not self._registered:
-            # Don't attempt to de-register if we're notregistered, 
+            # Don't attempt to de-register if we're not registered, 
             # there's a chance some other shutdown hook got here first.
             return
         
-        result: bool = deregister_client_rpc(name=self._name)
-        if not result:
-            self.log("ERR", f"Failed to de-register node <'{self._name}'>")
+        deregister_client_rpc(name=self._name, ignore_response=True)
         self._registered = False
 
     # threading.Thread
@@ -231,8 +231,8 @@ class Node():
         Message-handling loop. One-shot.
         """
 
-        ready_to_read: List[socket.socket] = []
-        ready_to_write: List[socket.socket] = []
+        ready_to_read: list[socket.socket] = []
+        ready_to_write: list[socket.socket] = []
 
         # acquire the "connection" mutex to ensure we don't read the list while it's changing
         if not self._conn_lock.acquire(blocking=False):
@@ -299,8 +299,7 @@ class Node():
             host=self._host,
             port=get_available_port(host=self._host, start=self._msg_port),
             logger=self._logger,
-            shutdown_event=self.shutdown_event
-        )
+            shutdown_event=self.shutdown_event)
 
         return publisher
 
@@ -319,8 +318,7 @@ class Node():
             port=get_available_port(host=self._host, start=self._msg_port),
             publisher_info=publisher_info,
             callback=callback,
-            logger=self._logger
-        )
+            logger=self._logger)
 
         self.subscribers.append(subscriber)
         return subscriber

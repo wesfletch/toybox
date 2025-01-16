@@ -13,27 +13,36 @@ from toybox_core.client import Client
 from toybox_core.launchable import Launchable
 from toybox_core.logging import LOG
 from toybox_core.topic import Topic
+from toybox_core.rpc.health import HealthRPCServicer
 from toybox_core.rpc.topic import TopicRPCServicer
 from toybox_core.rpc.register import RegisterServicer
 
+from toybox_msgs.core.Health_pb2_grpc import add_HealthServicer_to_server
 from toybox_msgs.core.Node_pb2 import InformConfirmation, TopicPublisherInfo
 from toybox_msgs.core.Topic_pb2_grpc import add_TopicServicer_to_server
 from toybox_msgs.core.Register_pb2_grpc import add_RegisterServicer_to_server
 from toybox_msgs.core.Null_pb2 import Null
 
 
+DEFAULT_TBX_SERVER_HOST: str = "localhost"
+DEFAULT_TBX_SERVER_PORT: int = 50051
+
+
 class ToyboxServer(Launchable):
 
-    def __init__(self) -> None:
+    def __init__(self, port: int | None = None) -> None:
         
         self._name: str = "tbx-server"
 
+        # "Context" that will be handed to RPC servicers
         self._topics: dict[str,Topic] = {}
         self._clients: dict[str,Client] = {}
         self._announcements: Queue[tuple[str,str]] = Queue()
 
         self._client_lock: threading.Lock = threading.Lock()
 
+        # RPC servicers
+        self._health_servicer: HealthRPCServicer = HealthRPCServicer()
         self._topic_servicer: TopicRPCServicer = TopicRPCServicer(
             topics=self._topics,
             clients=self._clients,
@@ -44,6 +53,9 @@ class ToyboxServer(Launchable):
             deregister_callback=self.deregister_client)
 
         self._server: grpc.Server = grpc.server(futures.ThreadPoolExecutor(max_workers=None))
+        add_HealthServicer_to_server(
+            servicer=self._health_servicer,
+            server=self._server)
         add_TopicServicer_to_server(
             servicer=self._topic_servicer,
             server=self._server)
@@ -51,7 +63,8 @@ class ToyboxServer(Launchable):
             servicer=self._register_servicer,
             server=self._server)
 
-        rpc_port: int = self._server.add_insecure_port('[::]:50051')
+        self.rpc_port: int = port if port else DEFAULT_TBX_SERVER_PORT
+        rpc_port: int = self._server.add_insecure_port(f'[::]:{self.rpc_port}')
         
         LOG("INFO", f"Server <{self._name}> ready on port {rpc_port}.")
         
@@ -77,17 +90,20 @@ class ToyboxServer(Launchable):
             self._announce_new_topics()
             
             time.sleep(1/60)
-
-    def shutdown(self) -> None:
+        
+    def shutdown(self, notify_clients: bool = True) -> None:
         """
         Send the shutdown signal to any registered clients.
         """
         if self._shutdown_event.is_set():
             return
 
-        for name, client in self._clients.items():
-            # client_stub = client.stub
-            
+        self._shutdown_event.set()
+
+        if not notify_clients:
+            return
+
+        for name, client in self._clients.items():       
             # Actually send the Shutdown() request to the client,
             # but use a timeout because we don't care about their response.
             shutdown_req: Null = Null()
@@ -100,7 +116,7 @@ class ToyboxServer(Launchable):
 
             LOG("INFO", f"Sent shutdown request to {name} at {client.addr}:{client.rpc_port}")
 
-        self._shutdown_event.set()
+        self._server.stop(grace=2.0)
 
     def ctrl_c_handler(self, signum, frame) -> None:
         self.shutdown()
@@ -177,7 +193,13 @@ class ToyboxServer(Launchable):
             topic_pub.publisher.publisher_host = publisher_addr[0]
             topic_pub.publisher.topic_port = publisher_addr[1]
 
-            inform_conf: InformConfirmation = subscriber.stub.InformOfPublisher(topic_pub, timeout=20)
+            # TEMP: just retry the InformOfPublisher RPC later if this fails
+            try:
+                inform_conf: InformConfirmation = subscriber.stub.InformOfPublisher(topic_pub, timeout=1.0)
+            except grpc.RpcError as e:
+                print(f"fuck: {e}")
+                self._announcements.put(announcement)
+                continue
 
             if inform_conf.return_code != 0:
                 raise Exception(f"Failed to inform subscriber {subscriber_name} of topic {topic.name}: {inform_conf.status}")
