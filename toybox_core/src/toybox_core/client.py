@@ -32,13 +32,12 @@ class Client():
             return
         
         with self._mutex:
-            if self._stub is None or self._channel is None:
-                if self._channel is None:
-                    LOG("DEBUG", f"Initializing channel for {self.client_id}")
-                    self._channel = grpc.insecure_channel(f'{self.addr}:{self.rpc_port}')
-                if self._stub is None:
-                    LOG("DEBUG", f"Initializing stub for {self.client_id}")
-                    self._stub = NodeStub(channel=self._channel)
+            if self._channel is None:
+                LOG("DEBUG", f"Initializing channel for {self.client_id}")
+                self._channel = grpc.insecure_channel(f'{self.addr}:{self.rpc_port}')
+            if self._stub is None:
+                LOG("DEBUG", f"Initializing stub for {self.client_id}")
+                self._stub = NodeStub(channel=self._channel)
         
         self._initialized = True
         LOG("DEBUG", f"Finished initializing client <{self.client_id}>")

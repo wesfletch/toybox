@@ -46,7 +46,7 @@ class Velocity:
 @dataclass
 class Position:
     """
-    Position in 2-space.
+    Position in 3-space.
     """
     x: float = 0.0
     y: float = 0.0

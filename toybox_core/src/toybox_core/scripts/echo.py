@@ -35,7 +35,7 @@ def main() -> None:
     spec.loader.exec_module(module)
     print(f"{module_name!r} has been imported")
 
-    echo_node: tbx.node.Node = tbx.init_node(
+    echo_node: tbx.node.Node = tbx.node.Node(
         name=f"echo_{str(uuid.uuid4())}", log_level="DEBUG")
 
     sub: tbx.Subscriber = echo_node.subscribe(

@@ -23,13 +23,17 @@ def parse_world_file(
     Returns:
         World: the World object created by parsing the world file
     """
+
+    print(f"Parsing world file <{filename}>")
+
     json_file: TextIOWrapper = open(filename, "r")
     json_file_loaded: Dict = json.load(json_file)
 
+    print(f"Finished parsing world file <{filename}>")
     return parse_world_json(json_file_loaded)
 
 def parse_world_json(
-    world_json: Dict
+    world_json: dict
 ) -> World:
     """
     Parses a json dictionary into a World object
@@ -41,31 +45,31 @@ def parse_world_json(
         World: World object created by parsing the world file
     """
     world_name: str | None = None
-    entities: Dict[str,Entity] | None = None
+    entities: dict[str,Entity] | None = None
 
     if "name" in world_json:
         world_name = world_json["name"]
 
     if "entities" in world_json:
-        entities_json: Dict[str,Any] = world_json["entities"]
+        entities_json: dict[str,Any] = world_json["entities"]
         entities = parse_entities(entities_json)
 
     return World(name=world_name, entities=entities)
 
 def parse_entities(
-    entities_json: Dict[str, Any],
-) -> List[Entity]:
+    entities_json: dict[str, Any],
+) -> list[Entity]:
     """
     Parses a list of json strings, returns a list of Entity objects.
 
     Args:
-        entities_json (List[str]): _description_
+        entities_json (list[str]): _description_
 
     Returns:
-        List[Entity]: _description_
+        list[Entity]: _description_
     """
-    entities: Dict[str,Entity] = {}
-    entity_config: Dict[str,str]
+    entities: dict[str,Entity] = {}
+    entity_config: dict[str,str]
 
     for entity_config in entities_json:
         entity: Entity = parse_entity(entity_config)
@@ -74,7 +78,7 @@ def parse_entities(
     return entities
 
 def parse_entity(
-    entity_config: Dict[str,str]
+    entity_config: dict[str,str]
 ) -> Entity:
 
     if "id" not in entity_config.keys():
