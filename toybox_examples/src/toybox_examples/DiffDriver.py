@@ -32,6 +32,8 @@ class DiffDriver(Launchable):
 
     def pre_launch(self) -> bool:
 
+        self._node.start()
+
         self._cmd_vel_publisher = self._node.advertise(
             topic_name=self._topic_cmd_vel, 
             message_type=VelocityMsg)
@@ -70,7 +72,8 @@ class DiffDriver(Launchable):
         self._node.shutdown()
 
     def imu_callback(self, msg: OrientationMsg) -> None:
-        print(msg)
+        # print(msg)
+        pass
 
 
 def main() -> None:

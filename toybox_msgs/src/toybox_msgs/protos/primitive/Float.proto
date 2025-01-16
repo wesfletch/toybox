@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+package primitive;
+
+message Float {
+    float value = 1;
+}
