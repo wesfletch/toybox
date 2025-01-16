@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 
 import math
-from typing import Callable, Dict, List, Tuple, Set
+from typing import Callable
 
 import pyglet
 from pyglet.window import mouse, key
 
 from toybox_sim.entity import Entity
-from toybox_sim.ply_parse import parse, PlyModel, PlyElement, PlyProperty, ParseError
+from toybox_sim.ply_parse import parse, PlyModel, PlyElement, ParseError
 
 pyglet.resource.path = ["/home/wfletcher/toybox/toybox_sim/resources/"]
 pyglet.resource.reindex()
@@ -26,25 +26,24 @@ class SimWindow(pyglet.window.Window):
         super().__init__(
             width=width,
             height=height,
-            resizable=True
-        )
+            resizable=True)
 
-        self._entities: Dict[str,Entity] = {} 
+        self._entities: dict[str,Entity] = {} 
 
-        self._grid_origin: Tuple[int,int] = (width//2, height//2)
+        self._grid_origin: tuple[int,int] = (width//2, height//2)
 
         self._grid_cell_size = PIXELS_PER_METER * 1
-        self._grid: Set[pyglet.shapes.ShapeBase] = set()
+        self._grid: set[pyglet.shapes.ShapeBase] = set()
         self._grid_batch: pyglet.graphics.Batch = pyglet.graphics.Batch()
         self.setup_grid()
 
         self._polygon_batch: pyglet.graphics.Batch = pyglet.graphics.Batch()
-        self._polygon_map: Dict[str, pyglet.shapes.Polygon] = {}
+        self._polygon_map: dict[str, pyglet.shapes.Polygon] = {}
 
         self._sprite_batch: pyglet.graphics.Batch = pyglet.graphics.Batch()
-        self._sprite_map: Dict[str, pyglet.sprite.Sprite] = {}
+        self._sprite_map: dict[str, pyglet.sprite.Sprite] = {}
 
-    def load_visuals(self, entities: Dict[str,Entity]) -> None:
+    def load_visuals(self, entities: dict[str,Entity]) -> None:
         """
         Loads the visual representations of entities into dict.
         """
@@ -68,7 +67,7 @@ class SimWindow(pyglet.window.Window):
                     continue
                 
                 # Extract the color information from the model, iff it exists.
-                color: Tuple[int,int,int] = (100,100,100)
+                color: tuple[int,int,int] = (100,100,100)
                 color_element: PlyElement | None = model.get_element("color")
                 if color_element is not None:
                     color = color_element.data[0]
@@ -84,8 +83,8 @@ class SimWindow(pyglet.window.Window):
                 # Get the center of the object described by the vertices and set it as the anchor,
                 # so that the center point of the model is in the middle of it, rather than
                 # the lower left corner
-                x_coords: List[float] = [vertex[0] for vertex in vertices_element.data]
-                y_coords: List[float] = [vertex[1] for vertex in vertices_element.data]
+                x_coords: list[float] = [vertex[0] for vertex in vertices_element.data]
+                y_coords: list[float] = [vertex[1] for vertex in vertices_element.data]
                 center_x = PIXELS_PER_METER * ((max(x_coords) - min(x_coords)) / 2)
                 center_y = PIXELS_PER_METER * ((max(y_coords) - min(y_coords)) / 2)
                 model_poly.anchor_position = (center_x, center_y)
@@ -104,7 +103,7 @@ class SimWindow(pyglet.window.Window):
                 sprite.scale = 0.1
                 self._sprite_map[key] = sprite
 
-    def get_grid_coordinates(self, x: float, y: float) -> Tuple[int,int]:
+    def get_grid_coordinates(self, x: float, y: float) -> tuple[int,int]:
 
         pixels_x: int = self._grid_origin[0] + int(PIXELS_PER_METER * x)
         pixels_y: int = self._grid_origin[1] + int(PIXELS_PER_METER * y)
@@ -169,6 +168,7 @@ class SimWindow(pyglet.window.Window):
 
     def on_draw(self):
         
+        print(f"on_draw, {self._entities.keys()}")
         self.clear()
 
         self._grid_batch.draw()
@@ -177,7 +177,7 @@ class SimWindow(pyglet.window.Window):
         for id in self._entities:
             entity: Entity = self._entities[id]
 
-            new_position: Tuple[int,int] = self.get_grid_coordinates(
+            new_position: tuple[int,int] = self.get_grid_coordinates(
                 entity.pose.position.x, entity.pose.position.y)
 
             if id in self._polygon_map:
@@ -194,11 +194,11 @@ class SimWindow(pyglet.window.Window):
         self._polygon_batch.draw()
 
     @property
-    def entities(self) -> Dict[str, Entity]:
+    def entities(self) -> dict[str, Entity]:
         return self._entities
 
     @entities.setter
-    def entities(self, new_entities: Dict[str,Entity]) -> None:
+    def entities(self, new_entities: dict[str,Entity]) -> None:
         self._entities = new_entities
 
     def trigger_shutdown(self) -> None:

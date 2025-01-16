@@ -11,6 +11,7 @@ from toybox_sim.primitives import Pose, Velocity
 
 from toybox_msgs.core.Test_pb2 import TestMessage
 from toybox_msgs.state.Velocity_pb2 import Velocity as VelocityMsg
+from toybox_msgs.primitive.Float_pb2 import Float as FloatMsg
 
 
 class DiffDrivePlugin(Plugin, BaseControlPluginIF):
@@ -52,13 +53,13 @@ class DiffDrivePlugin(Plugin, BaseControlPluginIF):
     @classmethod
     def from_config(
         cls,
-        json_config: Dict[str,str]
+        json_config: dict[str,str]
     ) -> Plugin:
         return DiffDrivePlugin(json_config=json_config)
 
     def parse_config(
         self,
-        json_dict: Dict[str,str]
+        json_dict: dict[str,str]
     ) -> None:
 
         for key, value in json_dict.items():
@@ -102,12 +103,9 @@ class DiffDrivePlugin(Plugin, BaseControlPluginIF):
         self,
         owner_id: str
     ) -> None:
-        """_summary_
-
-        Args:
-            owner (Entity): _description_
         """
-        # self._owner = owner
+        """
+
         self._owner_id = owner_id
         print(f'Plugin <{self._id}> initialized for Entity <{self.owner_id}>')
 
@@ -125,6 +123,12 @@ class DiffDrivePlugin(Plugin, BaseControlPluginIF):
         self._vel_pub: tbx.Publisher = self._node.advertise(
             topic_name=vel_pub_topic,
             message_type=VelocityMsg)
+        self._left_wheel_vel_pub: tbx.Publisher = self._node.advertise(
+            topic_name=f"/{self.owner_id}/{self.id}/left_wheel",
+            message_type=FloatMsg)
+        self._right_wheel_vel_pub: tbx.Publisher = self._node.advertise(
+            topic_name=f"/{self.owner_id}/{self.id}/right_wheel",
+            message_type=FloatMsg)
         
         cmd_vel_sub_topic: str = f"/{self.owner_id}/{self.id}/cmd_vel"
         self._node.log("DEBUG", f"Subscribing to command velocity on: {cmd_vel_sub_topic}")
@@ -160,7 +164,11 @@ class DiffDrivePlugin(Plugin, BaseControlPluginIF):
 
         current_vel: Velocity | None = self.context.get_entity_velocity(self._owner_id)
         if current_vel is not None:
+            left_vel, right_vel = self.calc_wheel_vels(current_vel)
+
             self._vel_pub.publish(current_vel.to_msg())
+            self._left_wheel_vel_pub.publish(FloatMsg(value=left_vel))
+            self._right_wheel_vel_pub.publish(FloatMsg(value=right_vel))
 
     def set_target_velocity(
         self,
@@ -188,7 +196,7 @@ class DiffDrivePlugin(Plugin, BaseControlPluginIF):
     def calc_wheel_vels(
         self,
         vel: Velocity,
-    ) -> Tuple[float, float]:
+    ) -> tuple[float, float]:
         """
         Decomposes a desired target velocity [x, theta] into L- and R-wheel velocities
         """

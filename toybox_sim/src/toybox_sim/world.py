@@ -20,7 +20,7 @@ class World:
         self._time: float = 0.0
         self._loop_frequency: int = 60
 
-        self._entities: Dict[str, Entity] = entities if entities else {}
+        self._entities: dict[str, Entity] = entities if entities else {}
         self._shutdown: bool = False
 
     @property
@@ -32,7 +32,7 @@ class World:
         self._name = new_name
 
     @property
-    def entities(self) -> Dict[str, Entity]:
+    def entities(self) -> dict[str, Entity]:
         return self._entities
 
     @property
@@ -51,6 +51,13 @@ class World:
             self._entities[entity.id] = entity
         
         return True
+
+    def initialize(self) -> None:
+        """
+        To be called AFTER tbx-server is available (or ELSE)
+        """
+        for entity in self.entities.values():
+            entity.init_plugins()
 
     def loop(
         self, 
@@ -83,12 +90,12 @@ class World:
             entity: Entity = self._entities[entity_id]
 
             # How much this entity will move; default is not moving at all
-            position_delta: Tuple[float,float,float] = (0.0,0.0,0.0)
+            position_delta: tuple[float,float,float] = (0.0,0.0,0.0)
 
             # If the entity has a BASE_CONTROL plugin, this is how we'll
             # report it's expected position change while respecting the plugins
             # motion model.
-            plugin_delta: Tuple[float,float,float] | None = None
+            plugin_delta: tuple[float,float,float] | None = None
 
             for plugin in entity.plugins.values():
                 

@@ -69,21 +69,25 @@ class Entity:
     def load_plugins(self, plugins: Dict[str,Plugin]) -> None:
         for plugin in plugins.keys():
             self.load_plugin(plugin_id=plugin, plugin=plugins[plugin])
-            print(self.plugins)
 
     def load_plugin(self, plugin_id: str, plugin: Plugin) -> bool:
 
         if plugin_id in self._plugins.keys():
-            print("Plugin with ID {plugin_id} already loaded.")
+            print(f"Plugin with ID {plugin_id} already loaded.")
             return False
 
         try:
             self.plugins[plugin_id] = plugin
-            self.plugins[plugin_id].initialize(owner_id=self.id)
+            # self.plugins[plugin_id].initialize(owner_id=self.id)
         except Exception as e:
             raise(e)
         
         return True
+
+    def init_plugins(self) -> None:
+
+        for plugin in self._plugins.values():
+            plugin.initialize(owner_id=self.id)
 
     def get_plugin(self, plugin_id: str) -> Plugin:
         
