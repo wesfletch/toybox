@@ -27,13 +27,15 @@ class Simulation(Launchable):
 
         self._USE_GUI: bool = use_gui
         self._window: SimWindow | None = None
-        if use_gui:
+        if self._USE_GUI:
             self._window = SimWindow()
             self._window.entities = self._world.entities
             self._window.load_visuals(self._window.entities)
             self._window.schedule_loop(self._world.step, frequency=self._world._loop_frequency)
     
     def run(self) -> None:
+
+        self._world.initialize()
 
         if self._USE_GUI:
             self._window.run()

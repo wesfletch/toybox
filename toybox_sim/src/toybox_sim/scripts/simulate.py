@@ -7,7 +7,6 @@ def main():
     
     sim: Simulation = Simulation(
         name="sim",
-        window=SimWindow(),
         world="/home/wfletcher/toybox/toybox_sim/resources/base_config.json",)
     sim.run()
 

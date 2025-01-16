@@ -2,7 +2,6 @@
 
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Any, Dict, Tuple
 import uuid
 
 from toybox_sim.primitives import Pose, Velocity
@@ -71,16 +70,16 @@ class Plugin(ABC):
     @abstractmethod
     def from_config(
         cls,
-        json_config: Dict[str,str]
+        json_config: dict[str,str]
     ) -> 'Plugin':
         raise NotImplementedError
 
     @abstractmethod
-    def parse_config(self, json_dict: Dict[str,str]) -> None:
+    def parse_config(self, json_dict: dict[str,str]) -> None:
         raise NotImplementedError
 
     @abstractmethod
-    def call(self) -> Any:
+    def call(self) -> None:
         raise NotImplementedError
 
 
