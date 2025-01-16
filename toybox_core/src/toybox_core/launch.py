@@ -9,9 +9,12 @@ from importlib.machinery import ModuleSpec
 from importlib.metadata import entry_points, EntryPoints
 from inspect import signature, Signature, Parameter
 import pathlib
+import random
 import signal
+import threading
 from types import ModuleType
-from typing import Any, Dict, Generic, List, TypeVar, get_args
+from typing import Any, Callable, Dict, Generic, List, TypeVar, get_args
+from toybox_core.rpc.health import try_health_check_rpc
 from typing_extensions import Self
 
 from toybox_core.launchable import Launchable
@@ -405,8 +408,109 @@ def launch(to_launch: Launchable) -> bool:
 
     return True
 
+def phase_prelaunch(launchable: Launchable) -> bool:
 
-def launch_all(launch_desc: LaunchDescription) -> None:
+    if not isinstance(launchable, Launchable):
+        raise LaunchError(f"Object provided as arg `launchable` isn't a Launchable <{launchable}>")
+
+    atexit.register(launchable.shutdown)
+
+    logger.LOG("DEBUG", f"Launch phase <PRELAUNCH> for <{launchable.name}>")
+    pre_result: bool = launchable.pre_launch()
+    if not pre_result:
+        logger.LOG("DEBUG", f"Launch phase <PRELAUNCH> for <{launchable.name}> FAILED.")
+        return False
+    
+    return True
+    
+def phase_launch(launchable: Launchable) -> bool:
+
+    if not isinstance(launchable, Launchable):
+        raise LaunchError(f"Object provided as arg `launchable` isn't a Launchable <{launchable}>")
+
+    atexit.register(launchable.shutdown)
+
+    logger.LOG("DEBUG", f"Launch phase <LAUNCH> <{launchable.name}>")
+    result: bool = launchable.launch()
+    if not result:
+        logger.LOG("DEBUG", f"Launch phase <LAUNCH> for <{launchable.name}> FAILED.")
+        return False
+    
+    return True
+
+def phase_postlaunch(launchable: Launchable) -> bool:
+
+    if not isinstance(launchable, Launchable):
+        raise LaunchError(f"Object provided as arg `launchable` isn't a Launchable <{launchable}>")
+
+    atexit.register(launchable.shutdown)
+
+    logger.LOG("DEBUG", f"Launch phase <POSTLAUNCH> for <{launchable.name}>")
+    result: bool = launchable.post_launch()
+    if not result:
+        logger.LOG("DEBUG", f"Launch phase <POSTLAUNCH> for <{launchable.name}> FAILED.")
+        return False
+    
+    return True
+
+def launch_phase(launchables: list[Launchable], func: Callable[[Launchable],bool]) -> bool:
+
+    def ctrl_c_handler(signum, frame) -> None:
+        for launchable in launchables:
+            launchable.shutdown()
+    
+    signal.signal(signal.SIGINT, ctrl_c_handler)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=None) as exec:
+
+        launch_group_futures: dict[Launchable,concurrent.futures.Future] = {}
+        for launchable in launchables:
+            launch_group_futures[launchable] = exec.submit(func, launchable)
+
+        done, not_done = concurrent.futures.wait(
+            launch_group_futures.values(),
+            timeout=None,
+            return_when=concurrent.futures.ALL_COMPLETED)
+        
+        for finished_task in done:
+            if not finished_task.result:
+                return False
+
+    return True
+
+
+def launch_phase_by_phase(launchables: list[Launchable]) -> None:
+
+    LOG("INFO", f"Starting <PRELAUNCH> phase.")
+    if not launch_phase(launchables, phase_prelaunch):
+        return False
+    LOG("INFO", f"Finished <PRELAUNCH> phase.")
+
+    LOG("INFO", f"Starting <LAUNCH> phase.")
+    if not launch_phase(launchables, phase_launch):
+        return False
+    LOG("INFO", f"Finished <LAUNCH> phase.")
+
+    LOG("INFO", f"Starting <POSTLAUNCH> phase.")
+    if not launch_phase(launchables, phase_postlaunch):
+        return False
+    LOG("INFO", f"Finished <POSTLAUNCH> phase.")
+
+
+def launch_tbx_server() -> tuple[Launchable,threading.Thread]:
+
+    tbx_server: Launchable = get_launch_description("ToyboxServer").instantiate()[0]
+
+    if not tbx_server.pre_launch():
+        tbx_server.shutdown(notify_clients=False)
+        raise Exception("Failed to pre-launch the tbx-server")
+    
+    tbx_server_thread = threading.Thread(target=phase_launch, args=[tbx_server])
+    tbx_server_thread.name = "tbx_server"
+    tbx_server_thread.start()
+
+    return (tbx_server, tbx_server_thread) 
+
+def launch_all(launch_desc: LaunchDescription, no_server: bool = False) -> None:
     """
     Launch all provided LaunchDescriptions in parallel.
     Returns when all Launched objects have finished.
@@ -418,29 +522,21 @@ def launch_all(launch_desc: LaunchDescription) -> None:
     # Resolve any LaunchDescriptions within our top-level LaunchDescription
     # and get a set of Launchables.
     launchables: list[Launchable] = launch_desc.instantiate()
-
-    def ctrl_c_handler(signum, frame) -> None:
-        for launchable in launchables:
-            launchable.shutdown()
     
-    signal.signal(signal.SIGINT, ctrl_c_handler)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=None) as exec:
+    # DEBUG: does ordering change the behavior here?
+    random.shuffle(launchables)
 
-        launch_group_futures: Dict[Launchable,concurrent.futures.Future] = {}
-        for launchable in launchables:
-            launch_group_futures[launchable] = exec.submit(launch, launchable)
+    # If we don't have an instance of tbx-server running, add it here.
+    tbx_server: Launchable | None = None
+    server_thread: threading.Thread | None = None
+    if not try_health_check_rpc() and not no_server:
+        tbx_server, server_thread = launch_tbx_server()
 
-        concurrent.futures.wait(
-            launch_group_futures.values(),
-            timeout=None,
-            return_when=concurrent.futures.ALL_COMPLETED)
-                
-    # # TODO: I'd rather use multiprocessing here, but multiprocessing and grpc require extra
-    # # work to play nice. Maybe later....
-    # l: multiprocessing.Process = multiprocessing.Process(target=launch, args=(listener,))
-    # p: multiprocessing.Process = multiprocessing.Process(target=launch, args=(pico_bridge,))
-    # for process in [l,p]:
-    #     process.start()
-    # for process in [l,p]:
-    #     process.join()
+    # Actually begin the launch process for our launchables.
+    launch_phase_by_phase(launchables=launchables)
+
+    # If we inserted a tbx-server, we "need" to kill it when we're done.
+    if tbx_server is not None:
+        tbx_server.shutdown()
+        server_thread.join()
 

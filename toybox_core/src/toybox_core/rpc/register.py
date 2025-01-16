@@ -203,6 +203,7 @@ def register_client_rpc(
 
 def deregister_client_rpc(
     name: str,
+    ignore_response: bool = False,
 ) -> bool:
     
     req: Register_pb2.DeRegisterRequest = Register_pb2.DeRegisterRequest(
@@ -213,9 +214,12 @@ def deregister_client_rpc(
         result = register_stub.DeRegisterClient(request=req)
         LOG("DEBUG", f"De-registering client <{name}> returned <{result.return_code == 0}>.")
     except grpc.RpcError as e:
-        LOG("ERR", f"Failed to de-register client {name}: {e}")
-        return False
-    
+        if not ignore_response:
+            LOG("ERR", f"Failed to de-register client {name}: {e}")
+            return False
+        else:
+            return True
+
     return (result.return_code == 0)
 
 def get_client_info_rpc(
