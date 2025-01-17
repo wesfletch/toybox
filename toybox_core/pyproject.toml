@@ -18,6 +18,7 @@ dependencies = [
     "toybox_msgs",
     "toml",
     "typing-extensions", # since 'Self' didn't make it into Python 3.10
+    "proto-schema-parser",
 ]
 
 [project.urls]
@@ -48,5 +49,5 @@ ToyboxServer = "toybox_core.scripts.server:ToyboxServer"
 
 [tool.toybox]
 launch-files = []
-message-files = []
+message-files = ["src/toybox_core/messages/protos"]
 resources = []
