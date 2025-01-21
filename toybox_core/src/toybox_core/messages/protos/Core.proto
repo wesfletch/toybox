@@ -6,6 +6,10 @@ package core;
 import "core/Health.proto";
 import "state/Orientation.proto";
 
+service CoreTestService {
+    rpc Test(core.HealthCheckRequest) returns (state.Orientation2D) {}
+}
+
 message CoreTest {
     string value = 1;
     core.HealthCheckResponse response = 2;
