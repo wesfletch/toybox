@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import ast
 from dataclasses import dataclass
 import glob
 import grpc_tools.protoc
@@ -20,16 +21,9 @@ class MessageSpec:
     proto_file_path: pathlib.Path
     proto_pkg_name: str
 
-    @property
-    def qualified_name(self) -> str:
-        """
-        The name that would be used to import this message from outside of its containing file.
-        """
-        return f"{self.proto_pkg_name}.{self.message_name}"
-    
 
 def get_message_paths(metadatas: Iterable[ToyboxMetadata]) -> list[pathlib.Path]:
-
+    
     message_paths: list[pathlib.Path] = []
     for metadata in metadatas:
         for relative_path in metadata.message_file_locations:
@@ -38,29 +32,19 @@ def get_message_paths(metadatas: Iterable[ToyboxMetadata]) -> list[pathlib.Path]
     return message_paths
 
 
-def find_msg_file(msg_file: str, search_paths: list[pathlib.Path]) -> pathlib.Path | None:
-
-    for search_path in search_paths:
-        path: pathlib.Path = search_path / msg_file
-        if path.exists():
-            return path
-        
-    return None
-
-
 def get_message_packages(metadatas: Iterable[ToyboxMetadata]) -> dict[str, list[MessageSpec]]:
 
-    returned: dict[str, list[MessageSpec]] = {}
+    message_pkgs: dict[str, list[MessageSpec]] = {}
 
     for meta in metadatas:
         msg_paths: list[pathlib.Path] = get_message_paths([meta])
         
-        all_messages: list[str] = []
+        all_proto_files: list[str] = []
         for msg_path in msg_paths:
-            all_messages += \
+            all_proto_files += \
                 [f"{proto_file}" for proto_file in glob.glob(str(msg_path) + "/" + "**/*.proto", recursive=True)]
 
-        for proto_file in all_messages:
+        for proto_file in all_proto_files:
             proto_file_text: str = open(proto_file, 'r').read()
             parsed_proto: proto_ast.File = Parser().parse(proto_file_text)
             
@@ -70,21 +54,23 @@ def get_message_packages(metadatas: Iterable[ToyboxMetadata]) -> dict[str, list[
                 if isinstance(element, proto_ast.Package):
                     proto_pkg_name = element.name
                 elif isinstance(element, proto_ast.Message):
-                    messages.append(element.name)
+                    messages.append(element)
 
-            if proto_pkg_name not in returned.keys():
-                returned[proto_pkg_name] = []
+            assert proto_pkg_name is not None, f"No package specified for .proto file {proto_file}."
+
+            if proto_pkg_name not in message_pkgs.keys():
+                message_pkgs[proto_pkg_name] = []
 
             for message in messages:
                 spec: MessageSpec = MessageSpec(
-                    message_name=message, 
+                    message_name=message.name, 
                     python_package_name=meta.package_name, 
                     proto_file_path=pathlib.Path(proto_file),
                     proto_pkg_name=proto_pkg_name)
                 
-                returned[proto_pkg_name].append(spec)
+                message_pkgs[proto_pkg_name].append(spec)
 
-    return returned
+    return message_pkgs
 
 
 def generate_messages(
@@ -110,9 +96,9 @@ def generate_messages(
 
     protoc_args: list[str] = [SCRIPT_NAME]
     protoc_args += proto_path                   # --proto_path IMPORTS, searched in order
-    protoc_args.append(python_out_str),         # --python_out PROTOBUF python output
-    protoc_args.append(grpc_python_out_str),    # --grpc_python_out GRPC python output
-    protoc_args.append(pyi_output_str),         # --pyi_out PYTHON interface file output
+    protoc_args.append(python_out_str)          # --python_out PROTOBUF python output
+    protoc_args.append(grpc_python_out_str)     # --grpc_python_out GRPC python output
+    protoc_args.append(pyi_output_str)          # --pyi_out PYTHON interface file output
     protoc_args += proto_files
 
     arg_string: str  = "".join([f"{arg} " for arg in protoc_args])
@@ -130,14 +116,16 @@ def modify_generated_python(
 
     ALL_PROTOS: dict[str, list[MessageSpec]] = get_message_packages(find_tbx_packages().values())
 
-    # proto_files: list[str] =  [f"{proto_file}" for proto_file in glob.glob(str(message_path) + "/*.proto")]
+    # Get a list of all .proto files on message_path.
     glob_str: str = str(message_path) + "/" + "**/*.proto"
     proto_files: list[str] = \
         [f"{proto_file}" for proto_file in glob.glob(glob_str, recursive=True)]
 
-    for proto_msg in proto_files:
+    # For each .proto file, parse the file to get all of the explicit imports and messages
+    # for us to use later when we need to update 
+    for proto_file in proto_files:
 
-        proto_path: pathlib.Path = pathlib.Path(proto_msg)
+        proto_path: pathlib.Path = pathlib.Path(proto_file)
 
         proto_text: str = open(proto_path, 'r').read()
 
@@ -157,7 +145,7 @@ def modify_generated_python(
                 package = element.name
         
         # Resolve all of the file imports: go and find the file that is being imported.
-        imported_messages: list[MessageSpec] = []
+        imported_msg_specs: list[MessageSpec] = []
         for imported_file in imports:
             proto_pkg, proto_file_name = imported_file.name.split('/')
             proto_file = proto_file_name.removesuffix(".proto")
@@ -172,11 +160,11 @@ def modify_generated_python(
             # message_spec: MessageSpec | None = None
             for spec in message_specs:
                 if spec.proto_file_path.stem == proto_file:
-                    imported_messages.append(spec)
+                    imported_msg_specs.append(spec)
 
         # Add all of the specs from the messages package, even if they're not explicitly imported,
         # because the auto-generated python DOES import them when needed
-        imported_messages += ALL_PROTOS.get(package, None)
+        imported_msg_specs += ALL_PROTOS.get(package, None)
 
         outfiles: list[pathlib.Path] = []
         proto_file_rel: str = str(proto_path.relative_to(message_path)).removesuffix(".proto")
@@ -191,34 +179,38 @@ def modify_generated_python(
 
         print(f"Updating files: {[str(outfile) for outfile in outfiles]}")
 
-        # Figure out which specific messages we're importing for each message
-        for _ in messages:
-            result: bool = update_file(
-                specs=imported_messages,
-                output_files=outfiles)
-            if not result:
-                raise Exception("Fuck!")
+        # Update the outfiles.
+        for message in messages:
+            try:
+                update_files(specs=imported_msg_specs, output_files=outfiles)
+            except Exception as e:
+                raise Exception(f"While processing {message.name}, failed to update {[str(outfile) for outfile in outfiles]}.") from e
 
     return True
 
-def update_file(
+def update_files(
     specs: list[MessageSpec],
     output_files: list[pathlib.Path]
 ) -> bool:
+    """
+    Update a group of Python files.
+
+    For now, this is only fixing imports of messages from other Python packages.
+    """
 
     for out_file in output_files:
         assert out_file.exists(), f"File to be updated {out_file} does not exist."
 
         output_txt: str = ""
 
-        pattern: re.Pattern = re.compile(pattern=f"^from ([A-Za-z0-9_]*) import ([A-Za-z0-9_]*_pb2)", flags=re.MULTILINE)
+        import_pattern: re.Pattern = re.compile(pattern=f"^from ([A-Za-z0-9_]*) import ([A-Za-z0-9_]*_pb2)", flags=re.MULTILINE)
         
         # Step line-by-line through the file, checking for lines that are attempting
         # imports so that we can "fix" them.
         with open(out_file, 'r') as f:
             for line in f:
                 # Is this an import line? If not, just move on.
-                match: re.Match | None = re.search(pattern=pattern, string=line)
+                match: re.Match | None = re.search(pattern=import_pattern, string=line)
                 if match is None:
                     output_txt += line
                     continue
@@ -238,32 +230,52 @@ def update_file(
                 if spec_we_want is None:
                     raise Exception(f"Couldn't find the spec we were looking for to match line: `{line}`")
 
-                # Actually perform the replacement.
+                # Actually perform the replacement, and insert a comment with the original line.
                 replace_line: str = f"from {spec_we_want.python_package_name}.{spec_we_want.proto_pkg_name} import {spec_we_want.proto_file_path.stem}_pb2"
-                print(f"In file {out_file}, performing replacement: `{str(pattern.pattern)}` --> `{replace_line}`")
-                new_line = re.sub(
-                    pattern=pattern,
+                print(f"In file {out_file}, performing replacement: `{str(import_pattern.pattern)}` --> `{replace_line}`")
+                new_line: str = re.sub(
+                    pattern=import_pattern,
                     repl=replace_line,
                     string=line)
 
+                output_txt += get_line_comment(line=line)
                 output_txt += new_line
         
+        # Make sure that our modifications don't leave us with broken Python files
+        try:
+            validate_updated_python(source=output_txt, filename=out_file)
+        except Exception as e:
+            raise Exception(f"Updating file {out_file} would break it!. Exception: \n{e}") from e
+
         # Push our changes to the output file.
         with open(out_file, 'w') as f:
             f.write(output_txt)
 
-    return True
+
+def get_line_comment(line: str) -> str:
+    return f"# !!!TBX-BUILD WAS HERE!!! Original line was: `{line.strip()}`\n"
+
+
+def validate_updated_python(source: str, filename: str) -> None:
+    """
+    For now, just parse the Python file and make sure the syntax is correct. 
+    Any other validation that needs to happen can be added here.
+    """
+    try:
+        ast.parse(source, filename=filename)
+    except SyntaxError as e:
+        raise Exception(f"Failed to validate: {e}") from e
 
 
 def build_messages(package_name: str | None = None) -> bool:
 
     tbx_packages: dict[str,ToyboxMetadata] = find_tbx_packages()
-    build_paths: list[pathlib.Path] 
 
-    # Even if we're only building one package, we need to context
+    # Even if we're only building one package, we need to give protoc the context
     # of all of the message paths to ensure that imports will work.
     ALL_MSG_PATHS: list[pathlib.Path] = get_message_paths(tbx_packages.values())
 
+    build_paths: list[pathlib.Path] 
     if package_name is not None:
         package: ToyboxMetadata | None = tbx_packages.get(package_name, None)
         if package is None:
