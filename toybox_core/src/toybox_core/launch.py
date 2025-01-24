@@ -510,7 +510,7 @@ def launch_tbx_server() -> tuple[Launchable,threading.Thread]:
 
     return (tbx_server, tbx_server_thread) 
 
-def launch_all(launch_desc: LaunchDescription, no_server: bool = False) -> None:
+def launch_all(launch_desc: LaunchDescription, no_server: bool = False, random_launch_order: bool = True) -> None:
     """
     Launch all provided LaunchDescriptions in parallel.
     Returns when all Launched objects have finished.
@@ -524,7 +524,8 @@ def launch_all(launch_desc: LaunchDescription, no_server: bool = False) -> None:
     launchables: list[Launchable] = launch_desc.instantiate()
     
     # DEBUG: does ordering change the behavior here?
-    random.shuffle(launchables)
+    if random_launch_order:
+        random.shuffle(launchables)
 
     # If we don't have an instance of tbx-server running, add it here.
     tbx_server: Launchable | None = None
