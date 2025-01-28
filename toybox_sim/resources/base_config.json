@@ -4,7 +4,7 @@
     [
         {
             "id": "test",
-            "model": "box.ply",
+            "model": "actor.ply",
             "plugins": 
             [
                 {
@@ -31,7 +31,7 @@
         },
         {
             "id": "testy",
-            "model": "box2.ply",
+            "model": "actor2.ply",
             "plugins": 
             [
                 {
@@ -66,6 +66,10 @@
             ]
         }
     ],
+    "objects": 
+    [
+        {
+            "model": "box.ply"
         }
     ]
 }
