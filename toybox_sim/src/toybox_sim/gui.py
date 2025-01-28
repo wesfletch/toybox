@@ -12,7 +12,7 @@ from toybox_sim.ply_parse import parse, PlyModel, PlyElement, ParseError
 pyglet.resource.path = ["/home/wfletcher/toybox/toybox_sim/resources/"]
 pyglet.resource.reindex()
 
-PIXELS_PER_METER: int = 40
+PIXELS_PER_METER: int = 100
 RADIANS_TO_DEGREES: float = 180 / math.pi
 
 class SimWindow(pyglet.window.Window):
@@ -21,6 +21,7 @@ class SimWindow(pyglet.window.Window):
         self,
         width: int = 800,
         height: int = 600,
+        pixels_per_meter: int = PIXELS_PER_METER
     ) -> None:
         
         super().__init__(
@@ -31,8 +32,9 @@ class SimWindow(pyglet.window.Window):
         self._entities: dict[str,Entity] = {} 
 
         self._grid_origin: tuple[int,int] = (width//2, height//2)
+        self.pixels_per_meter: int = pixels_per_meter
 
-        self._grid_cell_size = PIXELS_PER_METER * 1
+        self._grid_cell_size = self.pixels_per_meter * 1 # ???
         self._grid: set[pyglet.shapes.ShapeBase] = set()
         self._grid_batch: pyglet.graphics.Batch = pyglet.graphics.Batch()
         self.setup_grid()
@@ -42,6 +44,7 @@ class SimWindow(pyglet.window.Window):
 
         self._sprite_batch: pyglet.graphics.Batch = pyglet.graphics.Batch()
         self._sprite_map: dict[str, pyglet.sprite.Sprite] = {}
+
 
     def load_visuals(self, entities: dict[str,Entity]) -> None:
         """
@@ -67,15 +70,15 @@ class SimWindow(pyglet.window.Window):
                     continue
                 
                 # Extract the color information from the model, iff it exists.
-                color: tuple[int,int,int] = (100,100,100)
+                color: tuple[int,int,int,int] = (100,100,100, 255)
                 color_element: PlyElement | None = model.get_element("color")
                 if color_element is not None:
-                    color = color_element.data[0]
+                    color = color_element.data[0] + (255,)
 
                 # Generate the GL shape that will represent the model using the 
                 # vertices and (optional) color from the .ply file.
                 model_poly: pyglet.shapes.Polygon = pyglet.shapes.Polygon(
-                    *[(PIXELS_PER_METER * x[0], PIXELS_PER_METER * x[1]) for x in vertices_element.data],
+                    *[(self.pixels_per_meter * x[0], self.pixels_per_meter * x[1]) for x in vertices_element.data],
                     color=color,
                     batch=self._polygon_batch,
                 )
@@ -85,8 +88,8 @@ class SimWindow(pyglet.window.Window):
                 # the lower left corner
                 x_coords: list[float] = [vertex[0] for vertex in vertices_element.data]
                 y_coords: list[float] = [vertex[1] for vertex in vertices_element.data]
-                center_x = PIXELS_PER_METER * ((max(x_coords) - min(x_coords)) / 2)
-                center_y = PIXELS_PER_METER * ((max(y_coords) - min(y_coords)) / 2)
+                center_x = self.pixels_per_meter * ((max(x_coords) - min(x_coords)) / 2)
+                center_y = self.pixels_per_meter * ((max(y_coords) - min(y_coords)) / 2)
                 model_poly.anchor_position = (center_x, center_y)
 
                 self._polygon_map[key] = model_poly
@@ -105,8 +108,8 @@ class SimWindow(pyglet.window.Window):
 
     def get_grid_coordinates(self, x: float, y: float) -> tuple[int,int]:
 
-        pixels_x: int = self._grid_origin[0] + int(PIXELS_PER_METER * x)
-        pixels_y: int = self._grid_origin[1] + int(PIXELS_PER_METER * y)
+        pixels_x: int = self._grid_origin[0] + int(self.pixels_per_meter * x)
+        pixels_y: int = self._grid_origin[1] + int(self.pixels_per_meter * y)
 
         return pixels_x, pixels_y
     
@@ -168,7 +171,6 @@ class SimWindow(pyglet.window.Window):
 
     def on_draw(self):
         
-        print(f"on_draw, {self._entities.keys()}")
         self.clear()
 
         self._grid_batch.draw()
@@ -189,9 +191,14 @@ class SimWindow(pyglet.window.Window):
                 sprite: pyglet.sprite.Sprite = self._sprite_map[id]
                 sprite.position = (new_position[0], new_position[1], 0)
 
-        # self._sprite_batch.draw()
+            # Plugin visualizations
+            for plugin in entity.plugins.values():
+                plugin.visualize()
 
         self._polygon_batch.draw()
+
+        # self._sprite_batch.draw()
+
 
     @property
     def entities(self) -> dict[str, Entity]:

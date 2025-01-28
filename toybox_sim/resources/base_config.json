@@ -54,8 +54,18 @@
                     "type": "ImuPlugin",
 
                     "orientation_output_topic": "/testy/imu" 
+                },
+                {
+                    "plugin_id": "LaseyBoy",
+                    "type": "LaserSensorPlugin",
+
+                    "number_of_lasers": 90,
+                    "fov_start_angle": 45,
+                    "fov_end_angle": -45
                 }
             ]
+        }
+    ],
         }
     ]
 }

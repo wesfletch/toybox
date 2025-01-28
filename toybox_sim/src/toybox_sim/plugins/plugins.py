@@ -5,7 +5,7 @@ from enum import Enum
 import uuid
 
 from toybox_sim.primitives import Pose, Velocity
-from toybox_sim.context import PluginContext
+from toybox_sim.context import PluginContext, WindowContext
 
 
 class PluginNotFoundException(Exception):
@@ -58,6 +58,14 @@ class Plugin(ABC):
         self._context = context
 
     @property
+    def window_context(self) -> WindowContext | None:
+        return self._window_context
+    
+    @window_context.setter
+    def window_context(self, window_context: WindowContext) -> None:
+        self._window_context = window_context
+
+    @property
     @abstractmethod
     def plugin_type(self) -> PLUGIN_TYPE:
         raise NotImplementedError
@@ -81,7 +89,10 @@ class Plugin(ABC):
     @abstractmethod
     def call(self) -> None:
         raise NotImplementedError
-
+    
+    @abstractmethod
+    def visualize(self) -> None:
+        return None
 
 class BaseControlPluginIF(ABC):
 
@@ -110,6 +121,12 @@ class BaseControlPluginIF(ABC):
 
 
 class InteroceptivePluginIF(ABC):
+    """
+    TODO: One day this might actually have something in it. But for now...
+    """
+    pass
+
+class ExteroceptivePluginIF(ABC):
     """
     TODO: One day this might actually have something in it. But for now...
     """

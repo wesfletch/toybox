@@ -2,7 +2,7 @@
 
 import math
 import time
-from typing import Dict, Tuple, TYPE_CHECKING
+from typing import Tuple
 
 import toybox_core as tbx
 
@@ -23,7 +23,7 @@ class DiffDrivePlugin(Plugin, BaseControlPluginIF):
         self,
         id: str | None = None,
         owner_id: str | None = None,
-        json_config: Dict[str,str] | None = None
+        json_config: dict[str,str] | None = None
     ) -> None:
         
         Plugin.__init__(self, id=id, owner_id=owner_id)
@@ -169,6 +169,9 @@ class DiffDrivePlugin(Plugin, BaseControlPluginIF):
             self._vel_pub.publish(current_vel.to_msg())
             self._left_wheel_vel_pub.publish(FloatMsg(value=left_vel))
             self._right_wheel_vel_pub.publish(FloatMsg(value=right_vel))
+
+    def visualize(self) -> None:
+        return None
 
     def set_target_velocity(
         self,
