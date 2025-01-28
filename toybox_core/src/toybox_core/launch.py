@@ -2,7 +2,7 @@
 
 import atexit
 import concurrent.futures
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 import importlib.util
 from importlib.machinery import ModuleSpec
@@ -13,7 +13,7 @@ import random
 import signal
 import threading
 from types import ModuleType
-from typing import Any, Callable, Dict, Generic, List, TypeVar, get_args
+from typing import Any, Callable, Generic, List, TypeVar, get_args
 from toybox_core.rpc.health import try_health_check_rpc
 from typing_extensions import Self
 
@@ -35,9 +35,9 @@ TBX_NAMESPACE: str = "tbx."
 TBX_NODES: str = TBX_NAMESPACE + "nodes"
 
 
-def discover_all_launchable_nodes() -> Dict[str,Launchable]:
+def discover_all_launchable_nodes() -> dict[str,Launchable]:
 
-    all_launchable_nodes: Dict[str,Launchable] = {}
+    all_launchable_nodes: dict[str,Launchable] = {}
 
     entrypoints: EntryPoints = entry_points(group=TBX_NODES)
 
@@ -75,13 +75,13 @@ def discover_one_launchable_node(node_name: str) -> Launchable:
     return launchable_node
 
 
-def discover_launchable_node_params(package_name: str, node_name: str) -> Dict[str,NodeParam]:
+def discover_launchable_node_params(package_name: str, node_name: str) -> dict[str,NodeParam]:
 
-    launchable_params: Dict[str,NodeParam] = {}
+    launchable_params: dict[str,NodeParam] = {}
 
     full_node_name: str = f"{package_name}.{node_name}"
     
-    all_launchable_nodes: Dict[str,Launchable] = discover_all_launchable_nodes()
+    all_launchable_nodes: dict[str,Launchable] = discover_all_launchable_nodes()
     
     node: Launchable | None = all_launchable_nodes.get(full_node_name, None)
     if node is not None:
@@ -103,9 +103,9 @@ def discover_launchable_node_params(package_name: str, node_name: str) -> Dict[s
     return launchable_params
 
 
-def get_one_launchable_node_params(node: Launchable) -> Dict[str, NodeParam]:
+def get_one_launchable_node_params(node: Launchable) -> dict[str, NodeParam]:
 
-    params: Dict[str, NodeParam] = {}
+    params: dict[str, NodeParam] = {}
 
     init_func_signature: Signature = signature(node.__init__)
     for param in init_func_signature.parameters.values():
@@ -125,7 +125,7 @@ def get_one_launchable_node_params(node: Launchable) -> Dict[str, NodeParam]:
     return params
 
 
-def validate_params(params: Dict[str,NodeParam]) -> bool:
+def validate_params(params: dict[str,NodeParam]) -> bool:
     """
     Ensure that all required (no-default-provided) params are set, and that all
     set params match the expected type.
@@ -141,11 +141,11 @@ def validate_params(params: Dict[str,NodeParam]) -> bool:
     return True
 
 
-def unravel_params(params: Dict[str,NodeParam]) -> Dict[str,Any]:
+def unravel_params(params: dict[str,NodeParam]) -> dict[str,Any]:
 
     # TODO: this doesn't work for optionals (e.g., str | None) since None is string-able
 
-    returned: Dict[str,Any] = {}
+    returned: dict[str,Any] = {}
 
     # Attempt to cast each param value to the correct type
     for name, param in params.items():
@@ -208,7 +208,7 @@ class LaunchDescription():
 
         self._to_launch: list[Launchable] | list[LaunchDescription] | None = None
 
-    def set_params(self, params: Dict[str,Any]) -> None:        
+    def set_params(self, params: dict[str,Any]) -> None:        
         for name, value in params.items():
             param: NodeParam | None = self.params.get(name, None)
             if param is None:
@@ -257,6 +257,10 @@ class LaunchDescription():
                 launchables.extend(sub_launchables)
             else:
                 raise Exception(f"Something is very wrong... {self.to_launch}")
+
+        # Just a sanity check...
+        assert all([isinstance(launchable, Launchable) for launchable in launchables]), \
+            "All values returned from instantiate() MUST be Launchables"
 
         return launchables
 
@@ -375,9 +379,6 @@ def launch(to_launch: Launchable) -> bool:
     """
     Launch a single Launchable node.
     """
-    # # Don't try to launch things that aren't Launchables or LaunchDescriptions
-    # if isinstance(to_launch, LaunchDescription):
-    #     to_launch = to_launch.instantiate()
 
     if not isinstance(to_launch, Launchable):
         raise LaunchError(f"Object provided as arg `to_launch` isn't a Launchable <{to_launch}>")
@@ -450,74 +451,116 @@ def phase_postlaunch(launchable: Launchable) -> bool:
     if not result:
         logger.LOG("DEBUG", f"Launch phase <POSTLAUNCH> for <{launchable.name}> FAILED.")
         return False
+    logger.LOG("DEBUG", f"Finished <POSTLAUNCH> for <{launchable.name}>")
     
     return True
 
-def launch_phase(launchables: list[Launchable], func: Callable[[Launchable],bool]) -> bool:
+def launch_concurrent(
+    launchables: list[Launchable], 
+    func: Callable[[Launchable],bool],
+    # post_func: Callable[[Launchable],bool] | None =  None,
+# ) -> tuple[bool, list[Launchable]]: # list contains Launchables that returned early. 
+) -> bool:
+    """
+    Launch the given set of Launchables using a concurrent.futures.ThreadPoolExecutor.
+    """
 
+    # Register a CTRL-C handler that will shutdown all of the Launchables.
     def ctrl_c_handler(signum, frame) -> None:
         for launchable in launchables:
             launchable.shutdown()
-    
     signal.signal(signal.SIGINT, ctrl_c_handler)
+
+    # Spin up a thread pool for all of the Launchables.
     with concurrent.futures.ThreadPoolExecutor(max_workers=None) as exec:
 
-        launch_group_futures: dict[Launchable,concurrent.futures.Future] = {}
+        launch_group_futures: dict[concurrent.futures.Future, Launchable] = {}
         for launchable in launchables:
-            launch_group_futures[launchable] = exec.submit(func, launchable)
+            future: concurrent.futures.Future = exec.submit(func, launchable)
+            launch_group_futures[future] = launchable
+
+        # ## An option to resolve the TODO in launch_phase_by_phase could be something like this?
+        # ## This works! But I need to figure out how to better integrate it (and if I need it at all).
+        # finished_early: list[Launchables]
+        # for completed in concurrent.futures.as_completed(fs=launch_group_futures.keys()):
+        #     if completed.result() == True:
+        #         if post_func is not None:
+        #             exec.submit(post_func, launch_group_futures[completed])
+        #             finished_early.append(launch_group_futures[completed])
 
         done, not_done = concurrent.futures.wait(
-            launch_group_futures.values(),
+            launch_group_futures.keys(),
             timeout=None,
             return_when=concurrent.futures.ALL_COMPLETED)
         
         for finished_task in done:
-            if not finished_task.result:
+            if not finished_task.result():
                 return False
 
+    # return True, finished_early
     return True
 
 
 def launch_phase_by_phase(launchables: list[Launchable]) -> None:
 
+    # TODO: This doesn't handle the case where a Launchable exits launch() early 
+    # (before all of the other launchables).
+    #
+    # Conceptually, I'd expect that that launchable would immediately proceed to post_launch,
+    # but as written it'll just sit there waiting for all of the other nodes to finish their launch phases.
+    # This is something to think on, since it means that any "cleanup" logic in post_launch,
+    # like de-registering a topic or letting go of a resource, that other nodes might be depending
+    # on won't happen until it's too late for them...
+    #
+    # This isn't a huge problem right now since for the most part, the post_launch phase
+    # doesn't do very much...
+
     LOG("INFO", f"Starting <PRELAUNCH> phase.")
-    if not launch_phase(launchables, phase_prelaunch):
+    if not launch_concurrent(launchables, phase_prelaunch):
         return False
     LOG("INFO", f"Finished <PRELAUNCH> phase.")
 
     LOG("INFO", f"Starting <LAUNCH> phase.")
-    if not launch_phase(launchables, phase_launch):
+    # if not launch_concurrent(launchables, func=phase_launch, post_func=phase_postlaunch):
+    if not launch_concurrent(launchables, func=phase_launch):
         return False
     LOG("INFO", f"Finished <LAUNCH> phase.")
 
     LOG("INFO", f"Starting <POSTLAUNCH> phase.")
-    if not launch_phase(launchables, phase_postlaunch):
+    if not launch_concurrent(launchables, phase_postlaunch):
         return False
     LOG("INFO", f"Finished <POSTLAUNCH> phase.")
 
 
 def launch_tbx_server() -> tuple[Launchable,threading.Thread]:
 
+    # TODO: getting the TbxServer description is probably a "special case" that I can just create a 
+    # constant and/or function for, rather than needing to do this every time.
     tbx_server: Launchable = get_launch_description("ToyboxServer").instantiate()[0]
 
+    # Unlike the other nodes that we launch phase by phase, we need the 
+    # TbxServer to be done with its pre-launch and be into its launch phase before
+    # anything else can start (since all of the other nodes need the TbxServer to be available).
     if not tbx_server.pre_launch():
         tbx_server.shutdown(notify_clients=False)
-        raise Exception("Failed to pre-launch the tbx-server")
+        raise LaunchError("Failed to pre-launch the tbx-server")
     
     tbx_server_thread = threading.Thread(target=phase_launch, args=[tbx_server])
     tbx_server_thread.name = "tbx_server"
     tbx_server_thread.start()
 
-    return (tbx_server, tbx_server_thread) 
+    return (tbx_server, tbx_server_thread)
+
 
 def launch_all(launch_desc: LaunchDescription, no_server: bool = False, random_launch_order: bool = True) -> None:
     """
     Launch all provided LaunchDescriptions in parallel.
+
     Returns when all Launched objects have finished.
     """
 
     if launch_desc.to_launch is None:
-        raise Exception("Nothing to launch!")
+        raise LaunchError("Nothing to launch!")
 
     # Resolve any LaunchDescriptions within our top-level LaunchDescription
     # and get a set of Launchables.
@@ -530,7 +573,7 @@ def launch_all(launch_desc: LaunchDescription, no_server: bool = False, random_l
     # If we don't have an instance of tbx-server running, add it here.
     tbx_server: Launchable | None = None
     server_thread: threading.Thread | None = None
-    if not try_health_check_rpc() and not no_server:
+    if not no_server and not try_health_check_rpc() :
         tbx_server, server_thread = launch_tbx_server()
 
     # Actually begin the launch process for our launchables.

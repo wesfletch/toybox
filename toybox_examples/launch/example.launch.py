@@ -35,6 +35,7 @@ def get_launch_descriptions(launch_params: dict[str,NodeParam]) -> LaunchDescrip
 
     listener_launch_params: dict[str,NodeParam] = get_launch_params_from_file(listener_launch_file)
     listener_launch_params["listener_name"].value = other_listener_name.value
+    listener_launch_params["finish_early"].value = True
 
     listener_launch_file: LaunchDescription = get_launch_descs_from_file(
         launch_file_path=listener_launch_file,
