@@ -83,6 +83,9 @@ class ImuPlugin(Plugin, InteroceptivePluginIF):
         
         orientation_msg: Orientation2D = current_pose.orientation.to_msg()
         self.orientation_pub.publish(orientation_msg)
+    
+    def visualize(self) -> None:
+        return None
 
 
 def main() -> None:
