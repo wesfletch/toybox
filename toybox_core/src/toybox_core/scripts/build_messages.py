@@ -15,7 +15,7 @@ from toybox_core.metadata import ToyboxMetadata, find_tbx_packages
 
 
 @dataclass
-class MessageSpec:
+class ProtoMessageSpec:
     message_name: str
     python_package_name: str
     proto_file_path: pathlib.Path
@@ -32,9 +32,9 @@ def get_message_paths(metadatas: Iterable[ToyboxMetadata]) -> list[pathlib.Path]
     return message_paths
 
 
-def get_message_packages(metadatas: Iterable[ToyboxMetadata]) -> dict[str, list[MessageSpec]]:
+def get_message_packages(metadatas: Iterable[ToyboxMetadata]) -> dict[str, list[ProtoMessageSpec]]:
 
-    message_pkgs: dict[str, list[MessageSpec]] = {}
+    message_pkgs: dict[str, list[ProtoMessageSpec]] = {}
 
     for meta in metadatas:
         msg_paths: list[pathlib.Path] = get_message_paths([meta])
@@ -62,7 +62,7 @@ def get_message_packages(metadatas: Iterable[ToyboxMetadata]) -> dict[str, list[
                 message_pkgs[proto_pkg_name] = []
 
             for message in messages:
-                spec: MessageSpec = MessageSpec(
+                spec: ProtoMessageSpec = ProtoMessageSpec(
                     message_name=message.name, 
                     python_package_name=meta.package_name, 
                     proto_file_path=pathlib.Path(proto_file),
@@ -114,7 +114,7 @@ def modify_generated_python(
     pyi_output_dir: str | None = None,
 ) -> bool:
 
-    ALL_PROTOS: dict[str, list[MessageSpec]] = get_message_packages(find_tbx_packages().values())
+    ALL_PROTOS: dict[str, list[ProtoMessageSpec]] = get_message_packages(find_tbx_packages().values())
 
     # Get a list of all .proto files on message_path.
     glob_str: str = str(message_path) + "/" + "**/*.proto"
@@ -145,19 +145,19 @@ def modify_generated_python(
                 package = element.name
         
         # Resolve all of the file imports: go and find the file that is being imported.
-        imported_msg_specs: list[MessageSpec] = []
+        imported_msg_specs: list[ProtoMessageSpec] = []
         for imported_file in imports:
             proto_pkg, proto_file_name = imported_file.name.split('/')
             proto_file = proto_file_name.removesuffix(".proto")
 
-            # Find the spec on our proto file in the MessageSpecs
-            message_specs: list[MessageSpec] | None = ALL_PROTOS.get(proto_pkg, None)
+            # Find the spec on our proto file in the ProtoMessageSpecs
+            message_specs: list[ProtoMessageSpec] | None = ALL_PROTOS.get(proto_pkg, None)
             if message_specs is None:
                 raise Exception(f"No message specs for package {proto_pkg}")
 
             # Find the specific message spec we're looking for
             # TODO: this is dumb, just build it into the data structure
-            # message_spec: MessageSpec | None = None
+            # message_spec: ProtoMessageSpec | None = None
             for spec in message_specs:
                 if spec.proto_file_path.stem == proto_file:
                     imported_msg_specs.append(spec)
@@ -189,7 +189,7 @@ def modify_generated_python(
     return True
 
 def update_files(
-    specs: list[MessageSpec],
+    specs: list[ProtoMessageSpec],
     output_files: list[pathlib.Path]
 ) -> bool:
     """
@@ -221,8 +221,8 @@ def update_files(
                 proto_file_name: str = str(proto_file).removesuffix("_pb2") + ".proto"
 
                 # With the info from the import line, see if we have a relevant
-                # MessageSpec that points to the message the file is ACTUALLY looking for
-                spec_we_want: MessageSpec | None = None
+                # ProtoMessageSpec that points to the message the file is ACTUALLY looking for
+                spec_we_want: ProtoMessageSpec | None = None
                 for spec in specs:
                     if spec.proto_file_path.name == proto_file_name and \
                         spec.proto_pkg_name == proto_pkg_name:

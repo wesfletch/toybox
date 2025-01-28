@@ -48,7 +48,8 @@ class Listener(Launchable):
     def __init__(
         self, 
         name: str,
-        topic: str | None = None
+        topic: str | None = None,
+        finish_early: bool = False
     ) -> None:
         
         self._name = name
@@ -61,29 +62,36 @@ class Listener(Launchable):
 
         self._publisher: tbx.Publisher
 
+        self.finish_early: bool = finish_early
+        if self.finish_early:
+            self._finish_after_secs: int = 5
+
     def callback(self, message: TestMessage) -> None:
         print(f"{self._name} got {message}")
 
     def pre_launch(self) -> bool:
         self._node.start()
+        
         self._subscribed: bool = self._node.subscribe(
             topic_name=self.topic,
             message_type=TestMessage,
             callback_fn=self.callback)
-        
-        # self._publisher = self._node.advertise(
-        #     topic_name="/test",
-        #     message_type=TestMessage)
-
         if not self._subscribed:
             return False
-        # if self._publisher is None:
-        #     return False
+
         return True
         
     def launch(self) -> bool:
+
+        if self.finish_early:
+            start_time = time.time()
+
         freq: int = 10
         while not self._node.is_shutdown():
+            if self.finish_early:
+                if time.time() > (start_time + self._finish_after_secs):
+                    self._node.log("DEBUG", "FINISHING EARLY")
+                    return True
             time.sleep(1/freq)
         return True
     
