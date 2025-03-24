@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+package core;
+
+message Timestamp {
+    int64 secs = 1;
+    int32 nanosecs = 2;
+}

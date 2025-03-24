@@ -2,8 +2,12 @@ syntax = "proto3";
 
 package state;
 
+import "primitive/Quaternion.proto";
+
 message Orientation2D {
     float theta = 1;
 }
 
-// TODO: I don't feel like dealing with quaternions yet.
+message Orientation {
+    primitive.Quaternion orientation = 1;
+}
