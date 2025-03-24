@@ -99,7 +99,6 @@ class LaserSensorPlugin(Plugin, ExteroceptivePluginIF):
         # The distance between two lasers
         slice: float = fov / (self._num_of_lasers - 1)
 
-
         x: int = 1
         for y in range(1, self._num_of_lasers):
             if y == midpoint_index:
@@ -110,11 +109,9 @@ class LaserSensorPlugin(Plugin, ExteroceptivePluginIF):
                 theta: float = midpoint + (slice * x)
                 x += 1
 
-            # assert theta - midpoint < 0.001
-
             thetas.append(theta)
         
-        print(f"thetas=={[theta * (180 / math.pi) for theta in thetas]}")
+        # print(f"thetas=={[theta * (180 / math.pi) for theta in thetas]}")
         
         self._lasers: list[Laser] = [Laser(theta=theta, range=0) for theta in thetas]
 

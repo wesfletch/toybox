@@ -4,8 +4,15 @@ package state;
 
 import "state/Orientation.proto";
 import "state/Position.proto";
+import "primitive/Quaternion.proto";
+import "primitive/Vector.proto";
 
 message Pose2D {
     Position position = 1;
     Orientation2D orientation = 2;
+}
+
+message Pose {
+    primitive.Vector3 position = 1;
+    primitive.Quaternion orientation = 2;
 }

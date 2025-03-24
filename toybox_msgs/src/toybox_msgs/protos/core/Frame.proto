@@ -1,0 +1,93 @@
+syntax = "proto3";
+
+package core;
+
+import "core/Time.proto";
+import "state/Pose.proto";
+import "primitive/Vector.proto";
+import "primitive/Quaternion.proto";
+
+// Coordinate frame transforms.
+service Transform {
+    // Register a new coordinate frame.
+    // Frames must be registered BEFORE they're updated.
+    rpc RegisterFrame(RegisterFrameRequest) returns (RegisterFrameResponse) {}
+    
+    // Update an existing coordinate frame.
+    // Updates to unregistered frames will be rejected, as will
+    // updates with timestamps in the past.
+    rpc UpdateFrame(UpdateFrameRequest) returns (UpdateFrameResponse) {}
+
+    // Get the root frame of the tree.
+    // The root of the tree will always exist by the time this
+    // RPC can be called.
+    rpc GetRootFrame(GetRootFrameRequest) returns (GetRootFrameResponse) {}
+
+    // Get an existing coordinate frame transform
+    rpc GetFrame(GetFrameRequest) returns (GetFrameResponse) {}
+}
+
+// A coordinate frame transform.
+message FrameTransform {
+    primitive.Vector3 translation = 1;
+    primitive.Quaternion rotation = 2;
+}
+
+// A coordinate frame.
+message Frame {
+    // Timestamp
+    core.Timestamp stamp = 1;
+    // Unique ID of the parent of this frame.
+    // The parent frame MUST be registered already.
+    string parent_id = 2;
+    // Unique ID of this frame.
+    // This frame MUST be registered already.
+    string id = 3;
+    // Coordinate transform relative to parent.
+    FrameTransform transform = 4;
+}
+
+message RegisterFrameRequest {
+    string parent_id = 1;
+    string frame_id = 2;
+}
+
+message RegisterFrameResponse {
+    bool success = 1;
+    string status = 2;
+}
+
+message UpdateFrameRequest {
+    Frame frame = 1;
+}
+
+message UpdateFrameResponse {
+    bool success = 1;
+    string status = 2;
+}
+
+message GetRootFrameRequest {}
+
+message GetRootFrameResponse {
+    Frame root = 1;
+}
+
+// Frames are uniquely identified by their Parent/Child IDs.
+// No parent may have more than one child with a particular ID.
+message GetFrameRequest {
+    string parent_id = 1;
+    string frame_id = 2;
+}
+
+message GetFrameResponse {
+    bool success = 1;
+    string status = 2;
+    Frame frame = 3;
+}
+
+// A generic response that could probably be hoisted up into its own
+// file for use elsewhere.
+message Response {
+    bool success = 1;
+    string status = 2;
+}

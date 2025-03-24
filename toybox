@@ -3,38 +3,98 @@
 set -o errexit
 set -o pipefail
 set -o nounset
-# set -o xtrace
+# set -o xtrace # debug
 
-COMMAND="${1:-"run"}"
 
 USERNAME="${USER:-ubuntu}"
-CONTAINER_NAME="toybox"
+CONTAINER_IMG="toybox"
+CONTAINER_NAME=""
+COMMAND="run_container"
+DUMP=0
 
-if [[ "${COMMAND,,:-}" == "run" ]]; then
-    
-    docker run \
-        -it \
-        --rm \
-        --user "${USERNAME}" \
-        --volume "${PWD}:/home/${USERNAME}/toybox" \
-        --volume "/tmp/.X11-unix:/tmp/.X11-unix" \
-        --workdir "/home/${USERNAME}/toybox" \
-        -e DISPLAY \
-        -e "TERM=xterm-256color" \
-        "${CONTAINER_NAME}":latest
 
-elif [[ "${COMMAND,,:-}" == "build" ]]; then
-    
-    echo "--- Building ${CONTAINER_NAME} image ---"
-    docker build \
-        --tag "${CONTAINER_NAME}:latest" \
-        --build-arg USER="${USERNAME}" \
-        --build-arg UID="${UID}" \
-        .
+function dont_run_in_container()
+{
+    if [[ -f "/.dockerenv" ]]; then
+        echo "Don't run me inside a docker container, man"
+        exit 1
+    fi
+}
 
-else
+function build_container()
+{
+    echo "--- Building ${CONTAINER_IMG:?} image ---"
+    # docker build \
+    #     --tag "${CONTAINER_IMG:?}:latest" \
+    #     --build-arg USER="${USERNAME}" \
+    #     --build-arg UID="${UID}" \
+    #     .
+}
 
-    echo "What? ${COMMAND,,}"
-    exit 1
+function run_container()
+{
+    echo "run"
 
-fi
+    ARGS=(
+        -it
+        --rm
+        --user "${USERNAME}"
+        --volume "${PWD}:/home/${USERNAME}/toybox"
+        --volume "/tmp/.X11-unix:/tmp/.X11-unix"
+        --workdir "/home/${USERNAME}/toybox"
+        -e DISPLAY
+        -e "TERM=xterm-256color"
+    )
+    if [[ -n "${CONTAINER_NAME:-}" ]]; then
+        ARGS+=(--name "${CONTAINER_NAME}")
+    fi
+
+    if [[ "${DUMP}" == 1 ]]; then
+        echo "docker run ${ARGS[@]}"
+        return 0
+    fi
+
+    # Exec
+    if ! docker run "${ARGS[@]}" "${CONTAINER_IMG:?}":latest; then
+        return 1
+    fi
+}
+
+
+dont_run_in_container
+
+echo "${@}"
+# for ARG in "${@}"; do
+while [[ "${#}" -gt 0 ]]; do
+    ARG="${1}"
+    case "${ARG}" in
+        # Verbs
+        "build")
+            COMMAND="build_container"
+            ;;
+        "run")
+            COMMAND="run_container"
+            ;;
+        # Options
+        "-i" | "--image")
+            CONTAINER_IMG="${2}"
+            shift
+            ;;
+        "-n" | "--name")
+            CONTAINER_NAME="${2}"
+            shift
+            ;;
+        "--dump" | "--dump-command")
+            DUMP=1
+            ;;
+        # Default
+        *)
+            echo "What? ${ARG}"
+            exit 1
+    esac
+    shift
+done
+
+echo "GOT HERE!"
+
+"${COMMAND}"
