@@ -16,7 +16,7 @@ DUMP=0
 function dont_run_in_container()
 {
     if [[ -f "/.dockerenv" ]]; then
-        echo "Don't run me inside a docker container, man"
+        echo "Don't run this script inside a docker container, man"
         exit 1
     fi
 }
@@ -24,18 +24,16 @@ function dont_run_in_container()
 function build_container()
 {
     echo "--- Building ${CONTAINER_IMG:?} image ---"
-    # docker build \
-    #     --tag "${CONTAINER_IMG:?}:latest" \
-    #     --build-arg USER="${USERNAME}" \
-    #     --build-arg UID="${UID}" \
-    #     .
+    docker build \
+        --tag "${CONTAINER_IMG:?}:latest" \
+        --build-arg USER="${USERNAME}" \
+        --build-arg UID="${UID}" \
+        .
 }
 
 function run_container()
 {
-    echo "run"
-
-    ARGS=(
+    args=(
         -it
         --rm
         --user "${USERNAME}"
@@ -46,25 +44,19 @@ function run_container()
         -e "TERM=xterm-256color"
     )
     if [[ -n "${CONTAINER_NAME:-}" ]]; then
-        ARGS+=(--name "${CONTAINER_NAME}")
+        args+=(--name "${CONTAINER_NAME}")
     fi
 
     if [[ "${DUMP}" == 1 ]]; then
-        echo "docker run ${ARGS[@]}"
+        echo "docker run ${args[*]}"
         return 0
     fi
 
     # Exec
-    if ! docker run "${ARGS[@]}" "${CONTAINER_IMG:?}":latest; then
-        return 1
-    fi
+    docker run "${args[@]}" "${CONTAINER_IMG:?}":latest
 }
 
 
-dont_run_in_container
-
-echo "${@}"
-# for ARG in "${@}"; do
 while [[ "${#}" -gt 0 ]]; do
     ARG="${1}"
     case "${ARG}" in
@@ -95,6 +87,8 @@ while [[ "${#}" -gt 0 ]]; do
     shift
 done
 
-echo "GOT HERE!"
+# Doing this stuff INSIDE the toybox container doesn't make sense, 
+# and yet I keep accidentally doing it...
+dont_run_in_container
 
 "${COMMAND}"
