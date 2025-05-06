@@ -50,5 +50,5 @@ ToyboxServer = "toybox_core.scripts.server:ToyboxServer"
 
 [tool.toybox]
 launch-files = []
-message-files = ["src/toybox_core/messages/protos"]
+message-files = []
 resources = []
